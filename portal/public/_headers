@@ -1,0 +1,6 @@
+# Set correct MIME types for JavaScript modules
+/portal/assets/*.js
+  Content-Type: application/javascript; charset=utf-8
+  
+/portal/assets/*.css
+  Content-Type: text/css; charset=utf-8

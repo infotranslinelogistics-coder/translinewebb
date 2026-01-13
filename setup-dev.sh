@@ -1,0 +1,71 @@
+#!/bin/bash
+# INSTALL AND RUN GUIDE
+
+echo "======================================"
+echo "Translineweb Monorepo - Setup Guide"
+echo "======================================"
+echo ""
+
+# Check if node_modules exists
+if [ ! -d "node_modules" ]; then
+    echo "📦 Installing dependencies..."
+    npm install --legacy-peer-deps || npm install
+    echo "✅ Dependencies installed"
+else
+    echo "✅ node_modules already exists"
+fi
+
+echo ""
+echo "======================================"
+echo "DEVELOPMENT"
+echo "======================================"
+echo ""
+echo "To start the dev server, run:"
+echo ""
+echo "  npm run dev"
+echo ""
+echo "Then visit:"
+echo "  • Main site:   http://localhost:5173"
+echo "  • Admin portal: http://localhost:5173/portal"
+echo ""
+
+echo "======================================"
+echo "PRODUCTION BUILD"
+echo "======================================"
+echo ""
+echo "To build for production, run:"
+echo ""
+echo "  npm run build"
+echo ""
+echo "This creates:"
+echo "  • dist/ (main site files)"
+echo "  • dist/portal/ (portal app files)"
+echo ""
+
+echo "======================================"
+echo "PRODUCTION SERVER"
+echo "======================================"
+echo ""
+echo "To run the production server, use:"
+echo ""
+echo "  npm start"
+echo "  # or: npm run start:prod (includes build)"
+echo ""
+echo "Then visit:"
+echo "  • Main site:   http://localhost:5000"
+echo "  • Admin portal: http://localhost:5000/portal"
+echo ""
+
+echo "======================================"
+echo "FILE CHANGES MADE"
+echo "======================================"
+echo ""
+echo "✅ Created:  dev-server.js (Express dev server)"
+echo "✅ Modified: vite.config.ts"
+echo "✅ Modified: portal/vite.config.ts"
+echo "✅ Modified: portal/index.html"
+echo "✅ Modified: server.js"
+echo "✅ Modified: package.json"
+echo ""
+echo "See SETUP_GUIDE.md for detailed documentation."
+echo ""

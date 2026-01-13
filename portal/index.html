@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Portal - Transline Logistics</title>
+    <style>
+      .portal-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        background: #0a0a0b;
+        color: #e5e5e7;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      .portal-loading-content {
+        text-align: center;
+        padding: 20px;
+      }
+      .portal-loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #27272a;
+        border-top-color: #ff6b35;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .portal-error {
+        display: none;
+        color: #ef4444;
+        margin-top: 20px;
+        padding: 15px;
+        background: #1a1a1c;
+        border: 1px solid #27272a;
+        border-radius: 8px;
+        max-width: 500px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+    </style>
+    <script>
+      // Show error message if portal doesn't load within 10 seconds
+      setTimeout(function() {
+        var loadingDiv = document.querySelector('.portal-loading');
+        var errorDiv = document.getElementById('portal-timeout-error');
+        // Only show error if loading spinner is still visible
+        if (loadingDiv && errorDiv && loadingDiv.parentNode) {
+          errorDiv.style.display = 'block';
+          console.error('Portal failed to load within 10 seconds');
+        }
+      }, 10000);
+    </script>
+  </head>
+  <body class="dark">
+    <div id="root">
+      <div class="portal-loading">
+        <div class="portal-loading-content">
+          <div class="portal-loading-spinner"></div>
+          <div>Loading Transline Portal...</div>
+          <div id="portal-timeout-error" class="portal-error">
+            <strong>Portal Loading Timeout</strong><br>
+            The portal is taking longer than expected to load.<br>
+            Please check the browser console (F12) for errors.
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

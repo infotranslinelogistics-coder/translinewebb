@@ -1,0 +1,360 @@
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000000000000000000000000000000000000..c4c4ffc6aa41a89cc618a31d17f6d5924ddf2b10
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1 @@
++*.zip
+diff --git a/App.tsx b/App.tsx
+index 77bc804bd367884a9e9e0d5c890d40313c08aafd..2f2393a85c929e7c8f5f0146d70acbfcd021f923 100644
+--- a/App.tsx
++++ b/App.tsx
+@@ -1,42 +1,57 @@
+ import { useState, useEffect } from 'react';
+ import { Navigation } from './components/Navigation';
+ import { Footer } from './components/Footer';
+ import { HomePage } from './components/HomePage';
+ import { BookDemoPage } from './components/BookDemoPage';
+ import { AboutPage } from './components/AboutPage';
+ import { FAQPage } from './components/FAQPage';
+ import { ContactPage } from './components/ContactPage';
++import { PortalRouter } from './portal/PortalRouter';
+ 
+ export default function App() {
++  const [pathname, setPathname] = useState(window.location.pathname);
+   const [currentPage, setCurrentPage] = useState('home');
+ 
+   // Scroll to top when page changes
+   useEffect(() => {
+     window.scrollTo({ top: 0, behavior: 'smooth' });
+   }, [currentPage]);
+ 
++  useEffect(() => {
++    const handlePopState = () => {
++      setPathname(window.location.pathname);
++    };
++
++    window.addEventListener('popstate', handlePopState);
++    return () => window.removeEventListener('popstate', handlePopState);
++  }, []);
++
++  if (pathname.startsWith('/portal')) {
++    return <PortalRouter pathname={pathname} onNavigate={setPathname} />;
++  }
++
+   const handleNavigate = (page: string) => {
+     setCurrentPage(page);
+   };
+ 
+   const renderPage = () => {
+     switch (currentPage) {
+       case 'home':
+         return <HomePage onNavigate={handleNavigate} />;
+       case 'demo':
+         return <BookDemoPage />;
+       case 'about':
+         return <AboutPage />;
+       case 'faq':
+         return <FAQPage />;
+       case 'contact':
+         return <ContactPage onNavigate={handleNavigate} />;
+       default:
+         return <HomePage onNavigate={handleNavigate} />;
+     }
+   };
+ 
+   return (
+     <div className="min-h-screen flex flex-col">
+       <Navigation currentPage={currentPage} onNavigate={handleNavigate} />
+       <main className="flex-grow">{renderPage()}</main>
+diff --git a/portal/PortalRouter.tsx b/portal/PortalRouter.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..da7a9779da4ee1bfa32e95ff75f889e45ee1fecb
+--- /dev/null
++++ b/portal/PortalRouter.tsx
+@@ -0,0 +1,69 @@
++import { useEffect } from 'react';
++import { PortalGuard } from './components/PortalGuard';
++import { PortalLayout } from './components/PortalLayout';
++import { PortalAdminActionsScreen } from './pages/PortalAdminActionsScreen';
++import { PortalDashboardScreen } from './pages/PortalDashboardScreen';
++import { PortalEventsScreen } from './pages/PortalEventsScreen';
++import { PortalLoginScreen } from './pages/PortalLoginScreen';
++import { PortalShiftDetailScreen } from './pages/PortalShiftDetailScreen';
++import { PortalShiftsScreen } from './pages/PortalShiftsScreen';
++import { PortalVehiclesScreen } from './pages/PortalVehiclesScreen';
++
++interface PortalRouterProps {
++  pathname: string;
++  onNavigate: (nextPath: string) => void;
++}
++
++const normalizePortalPath = (path: string) => {
++  const trimmed = path.length > 1 ? path.replace(/\/+$/, '') : path;
++  return trimmed === '' ? '/' : trimmed;
++};
++
++export function PortalRouter({ pathname, onNavigate }: PortalRouterProps) {
++  const normalizedPath = normalizePortalPath(pathname);
++
++  useEffect(() => {
++    if (!normalizedPath.startsWith('/portal')) {
++      return;
++    }
++
++    const allowedPaths = [
++      '/portal',
++      '/portal/login',
++      '/portal/shifts',
++      '/portal/vehicles',
++      '/portal/events',
++      '/portal/admin',
++    ];
++
++    const isShiftDetail = /^\/portal\/shifts\/[^/]+$/.test(normalizedPath);
++
++    if (!allowedPaths.includes(normalizedPath) && !isShiftDetail) {
++      window.history.replaceState({}, '', '/portal');
++      onNavigate('/portal');
++    }
++  }, [normalizedPath, onNavigate]);
++
++  let content = <PortalDashboardScreen />;
++
++  if (normalizedPath === '/portal/login') {
++    content = <PortalLoginScreen />;
++  } else if (normalizedPath === '/portal/shifts') {
++    content = <PortalShiftsScreen />;
++  } else if (normalizedPath.startsWith('/portal/shifts/')) {
++    const shiftId = normalizedPath.replace('/portal/shifts/', '');
++    content = <PortalShiftDetailScreen shiftId={shiftId} />;
++  } else if (normalizedPath === '/portal/vehicles') {
++    content = <PortalVehiclesScreen />;
++  } else if (normalizedPath === '/portal/events') {
++    content = <PortalEventsScreen />;
++  } else if (normalizedPath === '/portal/admin') {
++    content = <PortalAdminActionsScreen />;
++  }
++
++  return (
++    <PortalGuard>
++      <PortalLayout>{content}</PortalLayout>
++    </PortalGuard>
++  );
++}
+diff --git a/portal/components/PortalGuard.tsx b/portal/components/PortalGuard.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..314d727eecf9694c59d2a73231535663c6f5cbfe
+--- /dev/null
++++ b/portal/components/PortalGuard.tsx
+@@ -0,0 +1,9 @@
++import type { ReactNode } from 'react';
++
++interface PortalGuardProps {
++  children: ReactNode;
++}
++
++export function PortalGuard({ children }: PortalGuardProps) {
++  return <>{children}</>;
++}
+diff --git a/portal/components/PortalLayout.tsx b/portal/components/PortalLayout.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..4397e2cf0878cde2dc27b819d5abb2fffcd5ad85
+--- /dev/null
++++ b/portal/components/PortalLayout.tsx
+@@ -0,0 +1,26 @@
++import type { ReactNode } from 'react';
++
++interface PortalLayoutProps {
++  children: ReactNode;
++}
++
++export function PortalLayout({ children }: PortalLayoutProps) {
++  return (
++    <div className="min-h-screen bg-slate-950 text-white">
++      <header className="border-b border-slate-800">
++        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
++          <div>
++            <p className="text-sm uppercase tracking-[0.3em] text-slate-400">
++              Transline Logistics
++            </p>
++            <h1 className="text-xl font-semibold">Operations Portal</h1>
++          </div>
++          <div className="text-sm text-slate-400">
++            Secure access to staffing and fleet data
++          </div>
++        </div>
++      </header>
++      <main className="mx-auto w-full max-w-6xl px-6 py-8">{children}</main>
++    </div>
++  );
++}
+diff --git a/portal/pages/PortalAdminActionsScreen.tsx b/portal/pages/PortalAdminActionsScreen.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..026cdabc605a1a4a716cc5841b8f8356ef7d3c3f
+--- /dev/null
++++ b/portal/pages/PortalAdminActionsScreen.tsx
+@@ -0,0 +1,13 @@
++export function PortalAdminActionsScreen() {
++  return (
++    <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-8">
++      <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-400">
++        Admin Actions
++      </p>
++      <h2 className="mt-3 text-3xl font-semibold">Operational controls</h2>
++      <p className="mt-2 text-slate-300">
++        Approve staffing changes, manage access, and broadcast updates.
++      </p>
++    </section>
++  );
++}
+diff --git a/portal/pages/PortalDashboardScreen.tsx b/portal/pages/PortalDashboardScreen.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..c39f54005dc2ff7e2be3347df3971f6c98db10dc
+--- /dev/null
++++ b/portal/pages/PortalDashboardScreen.tsx
+@@ -0,0 +1,30 @@
++export function PortalDashboardScreen() {
++  return (
++    <section className="space-y-6">
++      <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-8">
++        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-400">
++          Operations Dashboard
++        </p>
++        <h2 className="mt-3 text-3xl font-semibold">Daily readiness overview</h2>
++        <p className="mt-2 text-slate-300">
++          Track staffing, vehicle availability, and priority loads in one place.
++        </p>
++      </div>
++      <div className="grid gap-4 md:grid-cols-3">
++        {[
++          { label: 'Active Shifts', value: '18' },
++          { label: 'Vehicles Ready', value: '42' },
++          { label: 'Priority Loads', value: '7' },
++        ].map((card) => (
++          <div
++            key={card.label}
++            className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6"
++          >
++            <p className="text-sm text-slate-400">{card.label}</p>
++            <p className="mt-2 text-2xl font-semibold">{card.value}</p>
++          </div>
++        ))}
++      </div>
++    </section>
++  );
++}
+diff --git a/portal/pages/PortalEventsScreen.tsx b/portal/pages/PortalEventsScreen.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..8a3a543ac7b067c2d97afcc890e7a7669b1ef86f
+--- /dev/null
++++ b/portal/pages/PortalEventsScreen.tsx
+@@ -0,0 +1,13 @@
++export function PortalEventsScreen() {
++  return (
++    <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-8">
++      <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-400">
++        Operations Events
++      </p>
++      <h2 className="mt-3 text-3xl font-semibold">Dispatch timeline</h2>
++      <p className="mt-2 text-slate-300">
++        Monitor key milestones, delays, and route updates across regions.
++      </p>
++    </section>
++  );
++}
+diff --git a/portal/pages/PortalLoginScreen.tsx b/portal/pages/PortalLoginScreen.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..5826abf49bc097adacc9203e4863c0ae5c9424f4
+--- /dev/null
++++ b/portal/pages/PortalLoginScreen.tsx
+@@ -0,0 +1,20 @@
++export function PortalLoginScreen() {
++  return (
++    <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-8">
++      <div className="max-w-xl space-y-4">
++        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-400">
++          Portal Login
++        </p>
++        <h2 className="text-3xl font-semibold">Welcome back to Transline</h2>
++        <p className="text-slate-300">
++          Enter your operator credentials to manage staffing, fleet readiness, and
++          upcoming routes.
++        </p>
++        <div className="grid gap-3 text-sm text-slate-400">
++          <p>• Secure access with company-issued credentials.</p>
++          <p>• Contact dispatch for account support.</p>
++        </div>
++      </div>
++    </section>
++  );
++}
+diff --git a/portal/pages/PortalShiftDetailScreen.tsx b/portal/pages/PortalShiftDetailScreen.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..b01cfe87e66f36df9df9e14362da2ce9437b7207
+--- /dev/null
++++ b/portal/pages/PortalShiftDetailScreen.tsx
+@@ -0,0 +1,17 @@
++interface PortalShiftDetailScreenProps {
++  shiftId: string;
++}
++
++export function PortalShiftDetailScreen({ shiftId }: PortalShiftDetailScreenProps) {
++  return (
++    <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-8">
++      <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-400">
++        Shift Detail
++      </p>
++      <h2 className="mt-3 text-3xl font-semibold">Shift {shiftId}</h2>
++      <p className="mt-2 text-slate-300">
++        Confirm driver assignments, load requirements, and route timing.
++      </p>
++    </section>
++  );
++}
+diff --git a/portal/pages/PortalShiftsScreen.tsx b/portal/pages/PortalShiftsScreen.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..661256b2bdb71a6756fb139ae7907b1a1490d69c
+--- /dev/null
++++ b/portal/pages/PortalShiftsScreen.tsx
+@@ -0,0 +1,13 @@
++export function PortalShiftsScreen() {
++  return (
++    <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-8">
++      <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-400">
++        Shift Management
++      </p>
++      <h2 className="mt-3 text-3xl font-semibold">Upcoming driver shifts</h2>
++      <p className="mt-2 text-slate-300">
++        Review assignments, coverage, and open roles for the next 72 hours.
++      </p>
++    </section>
++  );
++}
+diff --git a/portal/pages/PortalVehiclesScreen.tsx b/portal/pages/PortalVehiclesScreen.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..376ab901d6d535efc8f14543de054a1b52f505f2
+--- /dev/null
++++ b/portal/pages/PortalVehiclesScreen.tsx
+@@ -0,0 +1,13 @@
++export function PortalVehiclesScreen() {
++  return (
++    <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-8">
++      <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-400">
++        Fleet Status
++      </p>
++      <h2 className="mt-3 text-3xl font-semibold">Vehicle readiness</h2>
++      <p className="mt-2 text-slate-300">
++        Track inspections, maintenance windows, and available units.
++      </p>
++    </section>
++  );
++}
+diff --git a/public/_redirects b/public/_redirects
+new file mode 100644
+index 0000000000000000000000000000000000000000..04564d75b96e4742a7d7f161f71eccc5741854e5
+--- /dev/null
++++ b/public/_redirects
+@@ -0,0 +1,2 @@
++/portal/*  /index.html  200
++/*        /index.html  200
