@@ -1,4 +1,5 @@
 import { supabase } from './supabase-client';
+import { Driver } from '../types/driver';
 
 // Fetch dashboard stats
 export async function fetchDashboardStats() {
@@ -120,15 +121,28 @@ export async function fetchShiftDetails(shiftId: string) {
 }
 
 // Fetch drivers
-export async function fetchDrivers() {
+export async function fetchDrivers(): Promise<Driver[]> {
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
     .eq('role', 'driver')
     .order('full_name');
 
-  if (error) throw error;
-  return data || [];
+  if (error) {
+    console.error('Error fetching drivers:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
+    throw new Error(`Failed to fetch drivers: ${error.message} (${error.code || 'unknown'})`);
+  }
+  
+  // Add 'name' alias for backwards compatibility
+  return (data || []).map(driver => ({
+    ...driver,
+    name: driver.full_name // Ensure both fields exist
+  })) as Driver[];
 }
 
 // Fetch vehicles
