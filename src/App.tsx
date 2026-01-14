@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { HomePage } from './components/HomePage';
@@ -62,12 +63,15 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header currentPage={currentPage} onNavigate={setCurrentPage} />
-      <main className="flex-1">
-        {renderPage()}
-      </main>
-      <Footer onNavigate={setCurrentPage} />
-    </div>
+    <>
+      <div className="min-h-screen flex flex-col">
+        <Header currentPage={currentPage} onNavigate={setCurrentPage} />
+        <main className="flex-1">
+          {renderPage()}
+        </main>
+        <Footer onNavigate={setCurrentPage} />
+      </div>
+      <Analytics />
+    </>
   );
 }
