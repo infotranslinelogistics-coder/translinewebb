@@ -8,7 +8,7 @@
     "dev:old": "vite",
     "dev:portal:old": "vite --config vite.portal.config.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:portal\"",
-    "build": "vite build && npm run build:portal",
+    "build": "vite build && cd portal && npm install && cd .. && npm run build:portal",
     "build:portal": "vite build --config portal/vite.config.ts",
     "preview": "vite preview",
     "start": "node server.js",
