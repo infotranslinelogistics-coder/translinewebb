@@ -34,6 +34,7 @@ export default function DriversManagement() {
   };
 
   const handleCreateDriver = async () => {
+    // Validation
     if (!createDialog.name.trim()) {
       alert('Please enter a driver name');
       return;
@@ -43,6 +44,13 @@ export default function DriversManagement() {
       alert('Please enter a driver email');
       return;
     }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(createDialog.email)) {
+      alert('Please enter a valid email address');
+      return;
+    }
 
     if (!createDialog.password.trim() || createDialog.password.length < 6) {
       alert('Please enter a password (minimum 6 characters)');
@@ -50,7 +58,13 @@ export default function DriversManagement() {
     }
 
     try {
-      // Create Supabase Auth user account
+      console.log('Creating driver with data:', {
+        email: createDialog.email,
+        name: createDialog.name,
+        phone: createDialog.phone
+      });
+
+      // Step 1: Create Supabase Auth user account
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: createDialog.email,
         password: createDialog.password,
@@ -63,39 +77,87 @@ export default function DriversManagement() {
         },
       });
 
-      if (authError) throw authError;
-
-      if (!authData.user) {
-        throw new Error('Failed to create user account');
+      if (authError) {
+        console.error('Auth signup error:', {
+          message: authError.message,
+          status: authError.status,
+          name: authError.name
+        });
+        throw new Error(`Failed to create auth user: ${authError.message}`);
       }
 
-      // Insert or update the profile with driver role
-      const { error: profileError } = await supabase.from('profiles').upsert({
+      if (!authData.user) {
+        throw new Error('Auth signup succeeded but no user object returned. This may indicate email confirmation is required.');
+      }
+
+      console.log('Auth user created successfully:', authData.user.id);
+
+      // Step 2: Insert or update the profile with driver role
+      const profileData = {
         id: authData.user.id,
         full_name: createDialog.name,
         email: createDialog.email,
         phone: createDialog.phone,
         role: 'driver',
         status: 'active',
-      });
+      };
 
-      if (profileError) throw profileError;
+      console.log('Inserting profile with data:', profileData);
 
-      // Log admin action
-      await logAdminAction(
-        'create_driver',
-        authData.user.id,
-        'driver',
-        `Created driver account for ${createDialog.name}`,
-        { email: createDialog.email, phone: createDialog.phone }
-      );
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert(profileData);
+
+      if (profileError) {
+        console.error('Profile creation error:', {
+          message: profileError.message,
+          code: profileError.code,
+          details: profileError.details,
+          hint: profileError.hint
+        });
+        
+        // Provide specific error messages based on error codes
+        let errorMessage = 'Failed to create driver profile: ';
+        
+        if (profileError.code === '23505') {
+          errorMessage += 'A driver with this email already exists.';
+        } else if (profileError.code === '42501') {
+          errorMessage += 'Permission denied. Please check RLS policies.';
+        } else if (profileError.code === '23503') {
+          errorMessage += 'Foreign key constraint violation.';
+        } else {
+          errorMessage += `${profileError.message}\n\nCode: ${profileError.code || 'unknown'}\nDetails: ${profileError.details || 'none'}\nHint: ${profileError.hint || 'none'}`;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      console.log('Profile created successfully');
+
+      // Step 3: Log admin action
+      try {
+        await logAdminAction(
+          'create_driver',
+          authData.user.id,
+          'driver',
+          `Created driver account for ${createDialog.name}`,
+          { email: createDialog.email, phone: createDialog.phone }
+        );
+      } catch (logError) {
+        console.warn('Failed to log admin action (non-critical):', logError);
+      }
 
       setCreateDialog({ open: false, name: '', email: '', phone: '', password: '' });
       fetchDriversData();
       alert('Driver created successfully! They can now log in to the mobile app with their email and password.');
+      
     } catch (error: any) {
-      console.error('Error creating driver:', error);
-      alert(`Failed to create driver: ${error.message || 'Unknown error'}`);
+      console.error('Driver creation failed:', {
+        message: error.message,
+        error: error
+      });
+      
+      alert(`Failed to create driver:\n\n${error.message}\n\nCheck the browser console for detailed error information.`);
     }
   };
 
@@ -188,7 +250,9 @@ export default function DriversManagement() {
                       </div>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm font-medium text-foreground">{driver.full_name}</TableCell>
+                  <TableCell className="text-sm font-medium text-foreground">
+                    {driver.full_name || driver.name || 'Unknown'}
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{driver.email || '-'}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{driver.phone || '-'}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
