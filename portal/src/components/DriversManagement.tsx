@@ -6,9 +6,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '../ui/input';
 import { fetchDrivers, logAdminAction } from '../lib/api';
 import { supabase } from '../lib/supabase-client';
+import { Driver } from '../types/driver';
 
 export default function DriversManagement() {
-  const [drivers, setDrivers] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialog, setCreateDialog] = useState({
     open: false,
