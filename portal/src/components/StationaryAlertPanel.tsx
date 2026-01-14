@@ -14,16 +14,16 @@ export function StationaryAlertPanel({ drivers }: StationaryAlertPanelProps) {
 
   if (stationaryDrivers.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow p-4">
-        <h3 className="text-lg font-semibold mb-2 text-gray-900">⚠️ Alerts</h3>
-        <p className="text-sm text-gray-500">No stationary drivers</p>
+      <div className="bg-card rounded-lg shadow p-4 border border-border">
+        <h3 className="text-lg font-semibold mb-2 text-foreground">⚠️ Alerts</h3>
+        <p className="text-sm text-muted-foreground">No stationary drivers</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <h3 className="text-lg font-semibold mb-3 text-gray-900">
+    <div className="bg-card rounded-lg shadow p-4 border border-border">
+      <h3 className="text-lg font-semibold mb-3 text-foreground">
         ⚠️ Alerts ({stationaryDrivers.length})
       </h3>
 
@@ -38,11 +38,11 @@ export function StationaryAlertPanel({ drivers }: StationaryAlertPanelProps) {
             <div key={driver.id} className={`p-3 rounded border ${severity}`}>
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="font-medium text-gray-900">{driver.full_name}</div>
-                  <div className="text-sm text-gray-600">
+                  <div className="font-medium text-foreground">{driver.full_name}</div>
+                  <div className="text-sm text-muted-foreground">
                     Vehicle: {driver.vehicle?.registration || 'N/A'}
                   </div>
-                  <div className="text-sm text-gray-600 mt-1">
+                  <div className="text-sm text-muted-foreground mt-1">
                     Stationary for <strong>{minutes} minutes</strong>
                   </div>
                 </div>

@@ -20,7 +20,7 @@ export function getDistance(
 
 /**
  * Check if driver is stationary based on recent locations
- * @param locations Array of location logs
+ * @param locations Array of location logs (assumed to be in chronological order)
  * @param radiusMeters Maximum radius to consider stationary (default: 50m)
  * @param durationMinutes Minimum duration to consider stationary (default: 10 min)
  * @returns true if driver is stationary
@@ -30,11 +30,11 @@ export function isDriverStationary(
   radiusMeters: number = 50,
   durationMinutes: number = 10
 ): boolean {
-  // Get recent locations
+  // Get recent locations (last 5)
   const recent = locations.slice(-5);
   if (recent.length < 2) return false;
 
-  // Check if all locations within radius
+  // Check if all locations within radius of the first location
   const center = recent[0];
   const allNearby = recent.every(loc =>
     getDistance(
@@ -43,7 +43,7 @@ export function isDriverStationary(
     ) < radiusMeters
   );
 
-  // Check if time elapsed exceeds duration
+  // Check if time elapsed from first to last location exceeds duration
   const duration = new Date(recent[recent.length - 1].timestamp).getTime()
     - new Date(recent[0].timestamp).getTime();
   const minutes = duration / (1000 * 60);
