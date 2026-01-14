@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Menu, X, LogOut, Home, Activity, Users, Truck, FileText, Shield, Eye } from 'lucide-react';
+import { Menu, X, LogOut, Home, Activity, Users, Truck, FileText, Shield, Eye, MapPin } from 'lucide-react';
 
 // Portal page components
 import OverviewDashboard from './src/components/OverviewDashboard';
@@ -11,6 +11,7 @@ import EventLogs from './src/components/EventLogs';
 import AdminOverrides from './src/components/AdminOverrides';
 import ShiftDetailView from './src/components/ShiftDetailView';
 import OdometerReview from './src/components/OdometerReview';
+import LiveTracking from './src/pages/LiveTracking';
 
 interface NavItem {
   id: string;
@@ -22,6 +23,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <Home className="w-5 h-5" />, path: '/' },
   { id: 'live-shifts', label: 'Live Shifts', icon: <Activity className="w-5 h-5" />, path: '/live-shifts' },
+  { id: 'live-tracking', label: 'Live Tracking', icon: <MapPin className="w-5 h-5" />, path: '/live-tracking' },
   { id: 'drivers', label: 'Drivers', icon: <Users className="w-5 h-5" />, path: '/drivers' },
   { id: 'vehicles', label: 'Vehicles', icon: <Truck className="w-5 h-5" />, path: '/vehicles' },
   { id: 'events', label: 'Events', icon: <FileText className="w-5 h-5" />, path: '/events' },
@@ -123,6 +125,7 @@ function App() {
             <Routes>
               <Route path="/" element={<OverviewDashboard onViewShift={setSelectedShift} />} />
               <Route path="/live-shifts" element={<LiveShiftsMonitor onViewShift={setSelectedShift} />} />
+              <Route path="/live-tracking" element={<LiveTracking />} />
               <Route path="/drivers" element={<DriversManagement />} />
               <Route path="/vehicles" element={<VehiclesManagement />} />
               <Route path="/events" element={<EventLogs />} />
