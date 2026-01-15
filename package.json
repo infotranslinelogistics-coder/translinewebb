@@ -12,7 +12,9 @@
     "build:portal": "vite build --config portal/vite.config.ts",
     "preview": "vite preview",
     "start": "node server.js",
-    "start:prod": "npm run build && npm start"
+    "start:prod": "npm run build && npm start",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.1",
@@ -29,7 +31,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^6.20.0",
-    "tailwind-merge": "^2.2.0"
+    "tailwind-merge": "^2.2.0",
+    "react-native": "0.81.5"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
