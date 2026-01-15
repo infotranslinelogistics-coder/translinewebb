@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "d3714d5f-7997-4adb-b913-3aa8190039e1"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.transline.logistics",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}
