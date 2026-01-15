@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { fetchDrivers, logAdminAction } from '../lib/api';
-import { supabase } from '../lib/supabase-client';
+import { supabase, supabaseAuth } from '../lib/supabase-client'; // Use admin client for driver management, auth client for signup
 import { Driver } from '../types/driver';
 
 export default function DriversManagement() {
@@ -66,7 +66,7 @@ export default function DriversManagement() {
       });
 
       // Step 1: Create Supabase Auth user account
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const { data: authData, error: authError } = await supabaseAuth.auth.signUp({
         email: createDialog.email,
         password: createDialog.password,
         options: {
