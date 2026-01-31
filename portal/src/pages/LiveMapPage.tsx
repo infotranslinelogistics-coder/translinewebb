@@ -5,13 +5,14 @@ import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
-import { MapPin, Loader, Search, RefreshCw, ExternalLink } from 'lucide-react';
+import { MapPin, Loader, Search, RefreshCw, ExternalLink, Footprints } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { listLatestLocationsByDrivers, DriverLocation } from '@/lib/db/locations';
 import { listDrivers } from '@/lib/db/drivers';
 import { listVehicles, Vehicle } from '@/lib/db/vehicles';
 import { supabase } from '@/lib/supabase';
 import { useDriverLiveState, isOnlineFromLastSeen, type DriverLiveStatus } from '@/lib/realtime/useDriverLiveState';
+import { computeDriverStops, type DriverStop } from '@/lib/db/stops';
 
 const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
 
@@ -27,10 +28,16 @@ export function LiveMapPage() {
   const [gpsOnly, setGpsOnly] = useState(false);
   const [vehicleFilter, setVehicleFilter] = useState<string>('all');
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+  const [showStops, setShowStops] = useState(false);
+  const [stopStartDate, setStopStartDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [stopEndDate, setStopEndDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [stops, setStops] = useState<DriverStop[]>([]);
+  const [loadingStops, setLoadingStops] = useState(false);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<Map<string, any>>(new Map());
+  const stopMarkersRef = useRef<any[]>([]);
   const hasCenteredRef = useRef(false);
 
   const driverMap = useMemo(() => {
@@ -161,6 +168,43 @@ export function LiveMapPage() {
       hasCenteredRef.current = true;
     }
   }, [filteredLocations, statusMap]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !window.L) return;
+
+    stopMarkersRef.current.forEach((marker) => map.removeLayer(marker));
+    stopMarkersRef.current = [];
+
+    if (!showStops || stops.length === 0) return;
+
+    stops.forEach((stop) => {
+      const marker = window.L.circleMarker([stop.lat, stop.lng], {
+        radius: 6,
+        color: '#F59E0B',
+        fillColor: '#F59E0B',
+        fillOpacity: 0.9,
+      });
+      marker.addTo(map);
+      stopMarkersRef.current.push(marker);
+    });
+  }, [showStops, stops]);
+
+  useEffect(() => {
+    const fetchStops = async () => {
+      if (!showStops || !selectedDriverId) {
+        setStops([]);
+        return;
+      }
+      setLoadingStops(true);
+      const startIso = new Date(`${stopStartDate}T00:00:00Z`).toISOString();
+      const endIso = new Date(`${stopEndDate}T23:59:59Z`).toISOString();
+      const stopRows = await computeDriverStops(selectedDriverId, startIso, endIso);
+      setStops(stopRows ?? []);
+      setLoadingStops(false);
+    };
+    fetchStops();
+  }, [showStops, selectedDriverId, stopStartDate, stopEndDate]);
 
   const selectedLocation = selectedDriverId ? locationMap[selectedDriverId] : null;
   const selectedDriver = selectedDriverId ? driverMap.get(selectedDriverId) : null;
@@ -302,6 +346,51 @@ export function LiveMapPage() {
 
           <Card className="bg-[#161616] border-gray-800">
             <CardHeader>
+              <CardTitle className="text-white">Stops</CardTitle>
+              <CardDescription className="text-gray-400">Show stops &gt; 2 minutes for a driver</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-gray-300">Enable stops</Label>
+                <input
+                  type="checkbox"
+                  checked={showStops}
+                  onChange={(e) => setShowStops(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-700 bg-[#0F0F0F]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-gray-300">Start date</Label>
+                <Input
+                  type="date"
+                  value={stopStartDate}
+                  onChange={(e) => setStopStartDate(e.target.value)}
+                  className="bg-[#0F0F0F] border-gray-700 text-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-gray-300">End date</Label>
+                <Input
+                  type="date"
+                  value={stopEndDate}
+                  onChange={(e) => setStopEndDate(e.target.value)}
+                  className="bg-[#0F0F0F] border-gray-700 text-white"
+                />
+              </div>
+              {showStops && selectedDriverId && (
+                <div className="text-xs text-gray-500 flex items-center gap-2">
+                  <Footprints className="w-4 h-4 text-[#FF6B35]" />
+                  {loadingStops ? 'Loading stops…' : `${stops.length} stops found`}
+                </div>
+              )}
+              {showStops && !selectedDriverId && (
+                <p className="text-xs text-gray-500">Select a driver on the map to show stops.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#161616] border-gray-800">
+            <CardHeader>
               <CardTitle className="text-white">Selected Driver</CardTitle>
               <CardDescription className="text-gray-400">
                 Click a pin to view details
@@ -366,6 +455,18 @@ export function LiveMapPage() {
                       Open in Google Maps
                     </a>
                   </Button>
+                  {selectedDriverId && (
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="w-full border-gray-700 text-gray-200"
+                    >
+                      <a href={`/portal/drivers/${selectedDriverId}/stops`}>
+                        <Footprints className="w-4 h-4 mr-2" />
+                        View Stops
+                      </a>
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>
