@@ -9,7 +9,8 @@
   "dev:all": "concurrently \"npm run dev\" \"npm --prefix portal run dev\"",
   "build": "vite build && npm --prefix portal ci && npm --prefix portal run build && rm -rf dist/portal && mkdir -p dist/portal && cp -R portal/dist/. dist/portal/",
   "preview": "vite preview",
-  "start": "node server.js"
+  "start": "node server.js",
+  "postinstall": "npm --prefix portal install"
 },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.1",
