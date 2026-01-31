@@ -11,7 +11,9 @@ export default defineConfig({
     host: true,
     hmr: {
       protocol: 'wss',
-      clientPort: 443,
+      host: 'congenial-carnival-jjp4759q4r7cprqg-5173.app.github.dev',
+      port: 443,
+      path: '/ws'
     },
   },
   resolve: {
