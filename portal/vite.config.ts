@@ -7,6 +7,13 @@ export default defineConfig({
   plugins: [
     react(),
   ],
+  server: {
+    host: true,
+    hmr: {
+      protocol: 'wss',
+      clientPort: 443,
+    },
+  },
   resolve: {
     alias: {
       // Alias @ to the src directory

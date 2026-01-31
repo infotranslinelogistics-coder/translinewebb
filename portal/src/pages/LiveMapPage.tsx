@@ -7,7 +7,7 @@ import { Label } from '@/app/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { MapPin, Loader, Search, RefreshCw, ExternalLink, Footprints } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
-import maplibregl from 'maplibre-gl';
+import L from 'leaflet';
 import { listLatestLocationsByDrivers, DriverLocation } from '@/lib/db/locations';
 import { listDrivers } from '@/lib/db/drivers';
 import { listVehicles, Vehicle } from '@/lib/db/vehicles';
@@ -16,7 +16,7 @@ import { useDriverLiveState, isOnlineFromLastSeen, type DriverLiveStatus } from 
 import { computeDriverStops, type DriverStop } from '@/lib/db/stops';
 import { OpenFreeMap } from '@/app/components/maps/OpenFreeMap';
 
-const DEFAULT_CENTER: [number, number] = [-122.4194, 37.7749];
+const DEFAULT_CENTER = { lat: 37.7749, lng: -122.4194 };
 
 export function LiveMapPage() {
   const { statusMap, setStatusMap, locationMap, setLocationMap } = useDriverLiveState();
@@ -37,9 +37,9 @@ export function LiveMapPage() {
   const [loadingStops, setLoadingStops] = useState(false);
   const [mapReady, setMapReady] = useState(false);
 
-  const mapInstanceRef = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
-  const stopMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const stopMarkersRef = useRef<L.CircleMarker[]>([]);
   const hasCenteredRef = useRef(false);
 
   const driverMap = useMemo(() => {
@@ -104,7 +104,7 @@ export function LiveMapPage() {
     }
   }, [locationMap]);
 
-  const handleMapReady = useCallback((map: maplibregl.Map) => {
+  const handleMapReady = useCallback((map: L.Map) => {
     mapInstanceRef.current = map;
     setMapReady(true);
   }, []);
@@ -139,24 +139,19 @@ export function LiveMapPage() {
       const online = isOnline(status);
       const isStale = new Date(loc.recorded_at) < new Date(Date.now() - 5 * 60 * 1000);
       const color = online ? (isStale ? '#F59E0B' : '#22C55E') : '#6B7280';
-      const el = document.createElement('div');
-      el.style.width = '14px';
-      el.style.height = '14px';
-      el.style.borderRadius = '50%';
-      el.style.border = '2px solid #fff';
-      el.style.background = color;
-      el.style.boxShadow = '0 0 6px rgba(0,0,0,0.45)';
-      el.addEventListener('click', () => setSelectedDriverId(loc.driver_id));
-      const marker = new maplibregl.Marker({ element: el })
-        .setLngLat([loc.lng, loc.lat])
-        .addTo(map);
+      const marker = L.marker([loc.lat, loc.lng], {
+        icon: L.divIcon({
+          className: 'driver-marker',
+          html: `<div style="background:${color};width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 6px rgba(0,0,0,0.45)"></div>`,
+        }),
+      }).addTo(map);
+      marker.on('click', () => setSelectedDriverId(loc.driver_id));
       markersRef.current.set(loc.driver_id, marker);
     });
 
     if (!hasCenteredRef.current && filteredLocations.length > 0) {
-      const bounds = new maplibregl.LngLatBounds();
-      filteredLocations.forEach((loc) => bounds.extend([loc.lng, loc.lat]));
-      map.fitBounds(bounds, { padding: 40, animate: false });
+      const bounds = L.latLngBounds(filteredLocations.map((loc) => [loc.lat, loc.lng]));
+      map.fitBounds(bounds, { padding: [40, 40] });
       hasCenteredRef.current = true;
     }
   }, [filteredLocations, statusMap, mapReady]);
@@ -171,15 +166,12 @@ export function LiveMapPage() {
     if (!showStops || stops.length === 0) return;
 
     stops.forEach((stop) => {
-      const el = document.createElement('div');
-      el.style.width = '12px';
-      el.style.height = '12px';
-      el.style.borderRadius = '50%';
-      el.style.background = '#F59E0B';
-      el.style.boxShadow = '0 0 6px rgba(0,0,0,0.45)';
-      const marker = new maplibregl.Marker({ element: el })
-        .setLngLat([stop.lng, stop.lat])
-        .addTo(map);
+      const marker = L.circleMarker([stop.lat, stop.lng], {
+        radius: 6,
+        color: '#F59E0B',
+        fillColor: '#F59E0B',
+        fillOpacity: 0.9,
+      }).addTo(map);
       stopMarkersRef.current.push(marker);
     });
   }, [showStops, stops, mapReady]);

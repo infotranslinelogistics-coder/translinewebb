@@ -1,26 +1,30 @@
 import React, { useEffect, useRef, useState } from 'react';
-import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
+import L from 'leaflet';
+import '@maplibre/maplibre-gl-leaflet';
 
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 
+declare module 'leaflet' {
+  export function maplibreGL(opts: { style: string }): L.Layer;
+}
+
 interface OpenFreeMapProps {
-  center?: [number, number];
+  center?: { lat: number; lng: number };
   zoom?: number;
   minHeight?: number;
   className?: string;
-  onMapReady?: (map: maplibregl.Map) => void;
+  onMapReady?: (map: L.Map) => void;
 }
 
 export function OpenFreeMap({
-  center = [-122.4194, 37.7749],
+  center = { lat: 37.7749, lng: -122.4194 },
   zoom = 11,
   minHeight = 420,
   className,
   onMapReady,
 }: OpenFreeMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
+  const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapInstance) return;
@@ -28,16 +32,16 @@ export function OpenFreeMap({
     if (clientHeight === 0) {
       console.warn('OpenFreeMap container has zero height. Ensure a minHeight is set.');
     }
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: STYLE_URL,
-      center,
-      zoom,
-    });
-    map.once('load', () => {
-      onMapReady?.(map);
-    });
+    const map = L.map(containerRef.current, {
+      zoomControl: true,
+      preferCanvas: true,
+    }).setView([center.lat, center.lng], zoom);
+
+    L.maplibreGL({ style: STYLE_URL }).addTo(map);
+    setTimeout(() => map.invalidateSize(true), 0);
+    onMapReady?.(map);
     setMapInstance(map);
+
     return () => {
       map.remove();
     };
@@ -51,7 +55,7 @@ export function OpenFreeMap({
           console.warn('OpenFreeMap container has zero height.');
         }
         if (entry.contentRect.height > 0 && entry.contentRect.width > 0) {
-          mapInstance.resize();
+          mapInstance.invalidateSize();
         }
       });
     });
