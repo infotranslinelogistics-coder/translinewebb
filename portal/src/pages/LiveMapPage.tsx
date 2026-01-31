@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
@@ -7,14 +7,16 @@ import { Label } from '@/app/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { MapPin, Loader, Search, RefreshCw, ExternalLink, Footprints } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
+import maplibregl from 'maplibre-gl';
 import { listLatestLocationsByDrivers, DriverLocation } from '@/lib/db/locations';
 import { listDrivers } from '@/lib/db/drivers';
 import { listVehicles, Vehicle } from '@/lib/db/vehicles';
 import { supabase } from '@/lib/supabase';
 import { useDriverLiveState, isOnlineFromLastSeen, type DriverLiveStatus } from '@/lib/realtime/useDriverLiveState';
 import { computeDriverStops, type DriverStop } from '@/lib/db/stops';
+import { OpenFreeMap } from '@/app/components/maps/OpenFreeMap';
 
-const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
+const DEFAULT_CENTER: [number, number] = [-122.4194, 37.7749];
 
 export function LiveMapPage() {
   const { statusMap, setStatusMap, locationMap, setLocationMap } = useDriverLiveState();
@@ -33,11 +35,11 @@ export function LiveMapPage() {
   const [stopEndDate, setStopEndDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [stops, setStops] = useState<DriverStop[]>([]);
   const [loadingStops, setLoadingStops] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
 
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markersRef = useRef<Map<string, any>>(new Map());
-  const stopMarkersRef = useRef<any[]>([]);
+  const mapInstanceRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const stopMarkersRef = useRef<maplibregl.Marker[]>([]);
   const hasCenteredRef = useRef(false);
 
   const driverMap = useMemo(() => {
@@ -102,21 +104,9 @@ export function LiveMapPage() {
     }
   }, [locationMap]);
 
-  useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current || !window.L) return;
-    const map = window.L.map(mapRef.current, {
-      center: DEFAULT_CENTER,
-      zoom: 11,
-      zoomControl: true,
-    });
-    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(map);
+  const handleMapReady = useCallback((map: maplibregl.Map) => {
     mapInstanceRef.current = map;
-
-    return () => {
-      map.remove();
-    };
+    setMapReady(true);
   }, []);
 
   const locationList = useMemo(() => Object.values(locationMap), [locationMap]);
@@ -139,11 +129,9 @@ export function LiveMapPage() {
 
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map || !window.L) return;
+    if (!map) return;
 
-    markersRef.current.forEach((marker) => {
-      map.removeLayer(marker);
-    });
+    markersRef.current.forEach((marker) => marker.remove());
     markersRef.current.clear();
 
     filteredLocations.forEach((loc) => {
@@ -151,44 +139,50 @@ export function LiveMapPage() {
       const online = isOnline(status);
       const isStale = new Date(loc.recorded_at) < new Date(Date.now() - 5 * 60 * 1000);
       const color = online ? (isStale ? '#F59E0B' : '#22C55E') : '#6B7280';
-      const marker = window.L.marker([loc.lat, loc.lng], {
-        icon: window.L.divIcon({
-          className: 'driver-marker',
-          html: `<div style="background:${color};width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 6px rgba(0,0,0,0.45)"></div>`,
-        }),
-      });
-      marker.addTo(map);
-      marker.on('click', () => setSelectedDriverId(loc.driver_id));
+      const el = document.createElement('div');
+      el.style.width = '14px';
+      el.style.height = '14px';
+      el.style.borderRadius = '50%';
+      el.style.border = '2px solid #fff';
+      el.style.background = color;
+      el.style.boxShadow = '0 0 6px rgba(0,0,0,0.45)';
+      el.addEventListener('click', () => setSelectedDriverId(loc.driver_id));
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([loc.lng, loc.lat])
+        .addTo(map);
       markersRef.current.set(loc.driver_id, marker);
     });
 
     if (!hasCenteredRef.current && filteredLocations.length > 0) {
-      const bounds = window.L.latLngBounds(filteredLocations.map((loc) => [loc.lat, loc.lng]));
-      map.fitBounds(bounds, { padding: [40, 40] });
+      const bounds = new maplibregl.LngLatBounds();
+      filteredLocations.forEach((loc) => bounds.extend([loc.lng, loc.lat]));
+      map.fitBounds(bounds, { padding: 40, animate: false });
       hasCenteredRef.current = true;
     }
-  }, [filteredLocations, statusMap]);
+  }, [filteredLocations, statusMap, mapReady]);
 
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map || !window.L) return;
+    if (!map) return;
 
-    stopMarkersRef.current.forEach((marker) => map.removeLayer(marker));
+    stopMarkersRef.current.forEach((marker) => marker.remove());
     stopMarkersRef.current = [];
 
     if (!showStops || stops.length === 0) return;
 
     stops.forEach((stop) => {
-      const marker = window.L.circleMarker([stop.lat, stop.lng], {
-        radius: 6,
-        color: '#F59E0B',
-        fillColor: '#F59E0B',
-        fillOpacity: 0.9,
-      });
-      marker.addTo(map);
+      const el = document.createElement('div');
+      el.style.width = '12px';
+      el.style.height = '12px';
+      el.style.borderRadius = '50%';
+      el.style.background = '#F59E0B';
+      el.style.boxShadow = '0 0 6px rgba(0,0,0,0.45)';
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([stop.lng, stop.lat])
+        .addTo(map);
       stopMarkersRef.current.push(marker);
     });
-  }, [showStops, stops]);
+  }, [showStops, stops, mapReady]);
 
   useEffect(() => {
     const fetchStops = async () => {
@@ -292,7 +286,13 @@ export function LiveMapPage() {
               </div>
             ) : (
               <div className="h-[520px] rounded-lg overflow-hidden border border-gray-800">
-                <div ref={mapRef} className="h-full w-full" />
+                <OpenFreeMap
+                  center={DEFAULT_CENTER}
+                  zoom={11}
+                  className="h-full w-full"
+                  minHeight={520}
+                  onMapReady={handleMapReady}
+                />
               </div>
             )}
           </CardContent>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -6,11 +6,15 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Loader, MapPin, Play } from 'lucide-react';
 import { format, formatDistanceStrict } from 'date-fns';
+import maplibregl from 'maplibre-gl';
 import { supabase } from '@/lib/supabase';
 import { computeDriverStops, computeStopsFromLocations, DriverStop } from '@/lib/db/stops';
 import { listDriverLocationsRange, type DriverLocation } from '@/lib/db/locations';
+import { OpenFreeMap } from '@/app/components/maps/OpenFreeMap';
 
-const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
+const DEFAULT_CENTER: [number, number] = [-122.4194, 37.7749];
+const ROUTE_SOURCE_ID = 'driver-route-source';
+const ROUTE_LAYER_ID = 'driver-route-layer';
 
 export function DriverStopsPage() {
   const { id } = useParams();
@@ -24,32 +28,19 @@ export function DriverStopsPage() {
   const [endDate, setEndDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
   const [playbackIndex, setPlaybackIndex] = useState(0);
+  const [mapReady, setMapReady] = useState(false);
 
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const routeLayerRef = useRef<any>(null);
-  const stopMarkersRef = useRef<any[]>([]);
-  const startEndMarkersRef = useRef<any[]>([]);
-  const playbackMarkerRef = useRef<any>(null);
+  const mapInstanceRef = useRef<maplibregl.Map | null>(null);
+  const stopMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const startEndMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const playbackMarkerRef = useRef<maplibregl.Marker | null>(null);
 
   const rangeStartIso = useMemo(() => new Date(`${startDate}T00:00:00Z`).toISOString(), [startDate]);
   const rangeEndIso = useMemo(() => new Date(`${endDate}T23:59:59Z`).toISOString(), [endDate]);
 
-  useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current || !window.L) return;
-    const map = window.L.map(mapRef.current, {
-      center: DEFAULT_CENTER,
-      zoom: 12,
-      zoomControl: true,
-    });
-    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(map);
+  const handleMapReady = useCallback((map: maplibregl.Map) => {
     mapInstanceRef.current = map;
-
-    return () => {
-      map.remove();
-    };
+    setMapReady(true);
   }, []);
 
   useEffect(() => {
@@ -93,58 +84,84 @@ export function DriverStopsPage() {
 
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map || !window.L) return;
+    if (!map) return;
 
-    if (routeLayerRef.current) {
-      map.removeLayer(routeLayerRef.current);
-      routeLayerRef.current = null;
+    if (map.getLayer(ROUTE_LAYER_ID)) {
+      map.removeLayer(ROUTE_LAYER_ID);
+    }
+    if (map.getSource(ROUTE_SOURCE_ID)) {
+      map.removeSource(ROUTE_SOURCE_ID);
     }
 
-    stopMarkersRef.current.forEach((marker) => map.removeLayer(marker));
+    stopMarkersRef.current.forEach((marker) => marker.remove());
     stopMarkersRef.current = [];
-    startEndMarkersRef.current.forEach((marker) => map.removeLayer(marker));
+    startEndMarkersRef.current.forEach((marker) => marker.remove());
     startEndMarkersRef.current = [];
 
     if (locations.length > 0) {
-      const latlngs = locations.map((loc) => [loc.lat, loc.lng]);
-      routeLayerRef.current = window.L.polyline(latlngs, { color: '#FF6B35', weight: 3 });
-      routeLayerRef.current.addTo(map);
-      map.fitBounds(routeLayerRef.current.getBounds(), { padding: [40, 40] });
+      const lineCoords = locations.map((loc) => [loc.lng, loc.lat]);
+      map.addSource(ROUTE_SOURCE_ID, {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: lineCoords,
+          },
+          properties: {},
+        },
+      });
+      map.addLayer({
+        id: ROUTE_LAYER_ID,
+        type: 'line',
+        source: ROUTE_SOURCE_ID,
+        paint: {
+          'line-color': '#FF6B35',
+          'line-width': 3,
+        },
+      });
+      const bounds = new maplibregl.LngLatBounds();
+      lineCoords.forEach((coord) => bounds.extend(coord as [number, number]));
+      map.fitBounds(bounds, { padding: 40, animate: false });
 
       const start = locations[0];
       const end = locations[locations.length - 1];
-      const startMarker = window.L.marker([start.lat, start.lng], {
-        title: 'Route start',
-      }).addTo(map);
-      const endMarker = window.L.marker([end.lat, end.lng], {
-        title: 'Route end',
-      }).addTo(map);
+      const startMarker = new maplibregl.Marker({ color: '#22C55E' })
+        .setLngLat([start.lng, start.lat])
+        .addTo(map);
+      const endMarker = new maplibregl.Marker({ color: '#EF4444' })
+        .setLngLat([end.lng, end.lat])
+        .addTo(map);
       startEndMarkersRef.current.push(startMarker, endMarker);
     }
 
     stops.forEach((stop) => {
-      const marker = window.L.circleMarker([stop.lat, stop.lng], {
-        radius: selectedStopId === stop.id ? 8 : 6,
-        color: selectedStopId === stop.id ? '#F59E0B' : '#22C55E',
-        fillColor: selectedStopId === stop.id ? '#F59E0B' : '#22C55E',
-        fillOpacity: 0.9,
-      }).addTo(map);
+      const el = document.createElement('div');
+      el.style.width = selectedStopId === stop.id ? '14px' : '12px';
+      el.style.height = selectedStopId === stop.id ? '14px' : '12px';
+      el.style.borderRadius = '50%';
+      el.style.background = selectedStopId === stop.id ? '#F59E0B' : '#22C55E';
+      el.style.boxShadow = '0 0 6px rgba(0,0,0,0.45)';
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([stop.lng, stop.lat])
+        .addTo(map);
       stopMarkersRef.current.push(marker);
     });
-  }, [locations, stops, selectedStopId]);
+  }, [locations, stops, selectedStopId, mapReady]);
 
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map || !window.L) return;
+    if (!map) return;
     if (playbackMarkerRef.current) {
-      map.removeLayer(playbackMarkerRef.current);
+      playbackMarkerRef.current.remove();
       playbackMarkerRef.current = null;
     }
     if (locations.length === 0) return;
     const location = locations[playbackIndex] ?? locations[0];
-    playbackMarkerRef.current = window.L.marker([location.lat, location.lng]);
-    playbackMarkerRef.current.addTo(map);
-  }, [locations, playbackIndex]);
+    playbackMarkerRef.current = new maplibregl.Marker({ color: '#2563EB' })
+      .setLngLat([location.lng, location.lat])
+      .addTo(map);
+  }, [locations, playbackIndex, mapReady]);
 
   const selectedStop = stops.find((stop) => stop.id === selectedStopId) ?? null;
   const playbackLocation = locations[playbackIndex];
@@ -152,7 +169,7 @@ export function DriverStopsPage() {
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || !selectedStop) return;
-    map.setView([selectedStop.lat, selectedStop.lng], 14);
+    map.easeTo({ center: [selectedStop.lng, selectedStop.lat], zoom: 14 });
   }, [selectedStop]);
 
   return (
@@ -228,7 +245,13 @@ export function DriverStopsPage() {
             ) : (
               <div className="space-y-4">
                 <div className="h-[420px] rounded-lg overflow-hidden border border-gray-800">
-                  <div ref={mapRef} className="h-full w-full" />
+                  <OpenFreeMap
+                    center={DEFAULT_CENTER}
+                    zoom={12}
+                    className="h-full w-full"
+                    minHeight={420}
+                    onMapReady={handleMapReady}
+                  />
                 </div>
                 {locations.length > 0 ? (
                   <div className="space-y-2">
