@@ -1,19 +1,22 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
-import { MapPin, Loader, Search, RefreshCw, ExternalLink } from 'lucide-react';
+import { MapPin, Loader, Search, RefreshCw, ExternalLink, Footprints } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
+import L from 'leaflet';
 import { listLatestLocationsByDrivers, DriverLocation } from '@/lib/db/locations';
 import { listDrivers } from '@/lib/db/drivers';
 import { listVehicles, Vehicle } from '@/lib/db/vehicles';
 import { supabase } from '@/lib/supabase';
 import { useDriverLiveState, isOnlineFromLastSeen, type DriverLiveStatus } from '@/lib/realtime/useDriverLiveState';
+import { computeDriverStops, type DriverStop } from '@/lib/db/stops';
+import { OpenFreeMap } from '@/app/components/maps/OpenFreeMap';
 
-const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
+const DEFAULT_CENTER = { lat: 37.7749, lng: -122.4194 };
 
 export function LiveMapPage() {
   const { statusMap, setStatusMap, locationMap, setLocationMap } = useDriverLiveState();
@@ -27,10 +30,16 @@ export function LiveMapPage() {
   const [gpsOnly, setGpsOnly] = useState(false);
   const [vehicleFilter, setVehicleFilter] = useState<string>('all');
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+  const [showStops, setShowStops] = useState(false);
+  const [stopStartDate, setStopStartDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [stopEndDate, setStopEndDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [stops, setStops] = useState<DriverStop[]>([]);
+  const [loadingStops, setLoadingStops] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
 
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markersRef = useRef<Map<string, any>>(new Map());
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const stopMarkersRef = useRef<L.CircleMarker[]>([]);
   const hasCenteredRef = useRef(false);
 
   const driverMap = useMemo(() => {
@@ -95,21 +104,9 @@ export function LiveMapPage() {
     }
   }, [locationMap]);
 
-  useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current || !window.L) return;
-    const map = window.L.map(mapRef.current, {
-      center: DEFAULT_CENTER,
-      zoom: 11,
-      zoomControl: true,
-    });
-    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(map);
+  const handleMapReady = useCallback((map: L.Map) => {
     mapInstanceRef.current = map;
-
-    return () => {
-      map.remove();
-    };
+    setMapReady(true);
   }, []);
 
   const locationList = useMemo(() => Object.values(locationMap), [locationMap]);
@@ -132,11 +129,9 @@ export function LiveMapPage() {
 
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map || !window.L) return;
+    if (!map) return;
 
-    markersRef.current.forEach((marker) => {
-      map.removeLayer(marker);
-    });
+    markersRef.current.forEach((marker) => marker.remove());
     markersRef.current.clear();
 
     filteredLocations.forEach((loc) => {
@@ -144,23 +139,58 @@ export function LiveMapPage() {
       const online = isOnline(status);
       const isStale = new Date(loc.recorded_at) < new Date(Date.now() - 5 * 60 * 1000);
       const color = online ? (isStale ? '#F59E0B' : '#22C55E') : '#6B7280';
-      const marker = window.L.marker([loc.lat, loc.lng], {
-        icon: window.L.divIcon({
+      const marker = L.marker([loc.lat, loc.lng], {
+        icon: L.divIcon({
           className: 'driver-marker',
           html: `<div style="background:${color};width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 6px rgba(0,0,0,0.45)"></div>`,
         }),
-      });
-      marker.addTo(map);
+      }).addTo(map);
       marker.on('click', () => setSelectedDriverId(loc.driver_id));
       markersRef.current.set(loc.driver_id, marker);
     });
 
     if (!hasCenteredRef.current && filteredLocations.length > 0) {
-      const bounds = window.L.latLngBounds(filteredLocations.map((loc) => [loc.lat, loc.lng]));
+      const bounds = L.latLngBounds(filteredLocations.map((loc) => [loc.lat, loc.lng]));
       map.fitBounds(bounds, { padding: [40, 40] });
       hasCenteredRef.current = true;
     }
-  }, [filteredLocations, statusMap]);
+  }, [filteredLocations, statusMap, mapReady]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    stopMarkersRef.current.forEach((marker) => marker.remove());
+    stopMarkersRef.current = [];
+
+    if (!showStops || stops.length === 0) return;
+
+    stops.forEach((stop) => {
+      const marker = L.circleMarker([stop.lat, stop.lng], {
+        radius: 6,
+        color: '#F59E0B',
+        fillColor: '#F59E0B',
+        fillOpacity: 0.9,
+      }).addTo(map);
+      stopMarkersRef.current.push(marker);
+    });
+  }, [showStops, stops, mapReady]);
+
+  useEffect(() => {
+    const fetchStops = async () => {
+      if (!showStops || !selectedDriverId) {
+        setStops([]);
+        return;
+      }
+      setLoadingStops(true);
+      const startIso = new Date(`${stopStartDate}T00:00:00Z`).toISOString();
+      const endIso = new Date(`${stopEndDate}T23:59:59Z`).toISOString();
+      const stopRows = await computeDriverStops(selectedDriverId, startIso, endIso);
+      setStops(stopRows ?? []);
+      setLoadingStops(false);
+    };
+    fetchStops();
+  }, [showStops, selectedDriverId, stopStartDate, stopEndDate]);
 
   const selectedLocation = selectedDriverId ? locationMap[selectedDriverId] : null;
   const selectedDriver = selectedDriverId ? driverMap.get(selectedDriverId) : null;
@@ -248,7 +278,13 @@ export function LiveMapPage() {
               </div>
             ) : (
               <div className="h-[520px] rounded-lg overflow-hidden border border-gray-800">
-                <div ref={mapRef} className="h-full w-full" />
+                <OpenFreeMap
+                  center={DEFAULT_CENTER}
+                  zoom={11}
+                  className="h-full w-full"
+                  minHeight={520}
+                  onMapReady={handleMapReady}
+                />
               </div>
             )}
           </CardContent>
@@ -297,6 +333,51 @@ export function LiveMapPage() {
                   </SelectContent>
                 </Select>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#161616] border-gray-800">
+            <CardHeader>
+              <CardTitle className="text-white">Stops</CardTitle>
+              <CardDescription className="text-gray-400">Show stops &gt; 2 minutes for a driver</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-gray-300">Enable stops</Label>
+                <input
+                  type="checkbox"
+                  checked={showStops}
+                  onChange={(e) => setShowStops(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-700 bg-[#0F0F0F]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-gray-300">Start date</Label>
+                <Input
+                  type="date"
+                  value={stopStartDate}
+                  onChange={(e) => setStopStartDate(e.target.value)}
+                  className="bg-[#0F0F0F] border-gray-700 text-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-gray-300">End date</Label>
+                <Input
+                  type="date"
+                  value={stopEndDate}
+                  onChange={(e) => setStopEndDate(e.target.value)}
+                  className="bg-[#0F0F0F] border-gray-700 text-white"
+                />
+              </div>
+              {showStops && selectedDriverId && (
+                <div className="text-xs text-gray-500 flex items-center gap-2">
+                  <Footprints className="w-4 h-4 text-[#FF6B35]" />
+                  {loadingStops ? 'Loading stops…' : `${stops.length} stops found`}
+                </div>
+              )}
+              {showStops && !selectedDriverId && (
+                <p className="text-xs text-gray-500">Select a driver on the map to show stops.</p>
+              )}
             </CardContent>
           </Card>
 
@@ -366,6 +447,18 @@ export function LiveMapPage() {
                       Open in Google Maps
                     </a>
                   </Button>
+                  {selectedDriverId && (
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="w-full border-gray-700 text-gray-200"
+                    >
+                      <a href={`/portal/drivers/${selectedDriverId}/stops`}>
+                        <Footprints className="w-4 h-4 mr-2" />
+                        View Stops
+                      </a>
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>

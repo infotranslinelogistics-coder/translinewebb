@@ -43,6 +43,63 @@ export async function createLocationLog(
   return data as DriverLocation;
 }
 
+export async function listDriverLocationsRange(
+  driverId: string,
+  startIso: string,
+  endIso: string
+): Promise<DriverLocation[]> {
+  const { data, error } = await supabase
+    .from('driver_locations')
+    .select('*')
+    .eq('driver_id', driverId)
+    .gte('recorded_at', startIso)
+    .lte('recorded_at', endIso)
+    .order('recorded_at', { ascending: true });
+
+  if (error) {
+    console.error('listDriverLocationsRange error:', error);
+    return [];
+  }
+
+  return (data as DriverLocation[]) || [];
+}
+
+export async function findNearestDriverLocation(
+  driverId: string,
+  targetIso: string,
+  windowMinutes: number = 5
+): Promise<DriverLocation | null> {
+  const target = new Date(targetIso).getTime();
+  const start = new Date(target - windowMinutes * 60 * 1000).toISOString();
+  const end = new Date(target + windowMinutes * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('driver_locations')
+    .select('*')
+    .eq('driver_id', driverId)
+    .gte('recorded_at', start)
+    .lte('recorded_at', end)
+    .order('recorded_at', { ascending: true });
+
+  if (error) {
+    console.error('findNearestDriverLocation error:', error);
+    return null;
+  }
+
+  const locations = (data as DriverLocation[]) ?? [];
+  if (locations.length === 0) return null;
+
+  let nearest = locations[0];
+  let nearestDiff = Math.abs(new Date(nearest.recorded_at).getTime() - target);
+  for (const loc of locations) {
+    const diff = Math.abs(new Date(loc.recorded_at).getTime() - target);
+    if (diff < nearestDiff) {
+      nearest = loc;
+      nearestDiff = diff;
+    }
+  }
+  return nearest;
+}
+
 export function subscribeToLocationUpdates(
   callback: (log: DriverLocation) => void,
   onError?: (error: Error) => void

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
@@ -279,6 +279,11 @@ export function DriverProfilePage() {
       <div>
         <h1 className="text-3xl font-bold text-white mb-2">{driverName}</h1>
         <p className="text-gray-400">Driver profile & history</p>
+        <div className="mt-4">
+          <Button asChild variant="outline" className="border-gray-700 text-gray-200">
+            <Link to={`/drivers/${driverId}/stops`}>View Stops & Playback</Link>
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-6">
