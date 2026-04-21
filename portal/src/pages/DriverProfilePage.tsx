@@ -70,6 +70,11 @@ interface DriverRow {
   status?: string;
 }
 
+interface DriverAssignmentSnapshot {
+  current_vehicle_id: string | null;
+  current_vehicle_rego: string | null;
+}
+
 const PAGE_SIZE = 10;
 
 export function DriverProfilePage() {
@@ -77,6 +82,7 @@ export function DriverProfilePage() {
   const driverId = id ?? '';
   const [driver, setDriver] = useState<DriverRow | null>(null);
   const [status, setStatus] = useState<DriverStatusRow | null>(null);
+  const [assignmentSnapshot, setAssignmentSnapshot] = useState<DriverAssignmentSnapshot | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [activeShift, setActiveShift] = useState<ShiftRow | null>(null);
   const [latestOdometer, setLatestOdometer] = useState<OdometerRow | null>(null);
@@ -119,10 +125,22 @@ export function DriverProfilePage() {
     const fetchBase = async () => {
       try {
         setLoading(true);
-        const [driverResponse, statusResponse, vehicleList, activeShiftResponse, latestOdometerResponse] =
+        const [
+          driverResponse,
+          statusResponse,
+          assignmentResponse,
+          vehicleList,
+          activeShiftResponse,
+          latestOdometerResponse,
+        ] =
           await Promise.all([
             supabase.from('drivers_full').select('*').eq('driver_id', driverId).maybeSingle(),
             supabase.from('view_driver_current_status').select('*').eq('driver_id', driverId).maybeSingle(),
+            supabase
+              .from('drivers_with_current_vehicle')
+              .select('current_vehicle_id, current_vehicle_rego')
+              .eq('driver_id', driverId)
+              .maybeSingle(),
             listVehicles(),
             supabase.from('shifts').select('*').eq('driver_id', driverId).or('status.eq.active,ended_at.is.null').order('started_at', { ascending: false }).limit(1),
             supabase
@@ -134,6 +152,7 @@ export function DriverProfilePage() {
           ]);
         setDriver((driverResponse.data as DriverRow) ?? null);
         setStatus((statusResponse.data as DriverStatusRow) ?? null);
+        setAssignmentSnapshot((assignmentResponse.data as DriverAssignmentSnapshot) ?? null);
         setVehicles(vehicleList ?? []);
         setActiveShift((activeShiftResponse.data as ShiftRow[])?.[0] ?? null);
         const latest = (latestOdometerResponse.data as OdometerRow[])?.[0] ?? null;
@@ -278,7 +297,16 @@ export function DriverProfilePage() {
   }
 
   const driverName = driver?.full_name ?? driver?.name ?? driver?.email ?? driverId;
-  const currentVehicle = status?.vehicle_id ? vehicleMap.get(status.vehicle_id) : null;
+  const assignedVehicle = assignmentSnapshot?.current_vehicle_id
+    ? vehicleMap.get(assignmentSnapshot.current_vehicle_id)
+    : null;
+  const telemetryVehicle = status?.vehicle_id ? vehicleMap.get(status.vehicle_id) : null;
+  const formatVehicleLabel = (vehicle?: Vehicle | null) => {
+    if (!vehicle) return null;
+    const rego = vehicle.rego ?? 'Unknown rego';
+    const makeModel = [vehicle.make, vehicle.model].filter(Boolean).join(' ');
+    return makeModel ? `${rego} • ${makeModel}` : rego;
+  };
   const gpsActive = status?.last_location_at
     ? new Date(status.last_location_at) > new Date(Date.now() - 5 * 60 * 1000)
     : false;
@@ -395,18 +423,20 @@ export function DriverProfilePage() {
 
             <Card className="bg-[#161616] border-gray-800">
               <CardHeader>
-                <CardTitle className="text-white">Current Vehicle</CardTitle>
-                <CardDescription className="text-gray-400">Assignment & odometer</CardDescription>
+                <CardTitle className="text-white">Assigned Vehicle</CardTitle>
+                <CardDescription className="text-gray-400">Assignment truth & odometer</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {currentVehicle ? (
+                {assignedVehicle ? (
                   <div className="text-sm text-gray-300">
-                    <p>{currentVehicle.plate_number}</p>
-                    <p className="text-xs text-gray-500">{currentVehicle.make} {currentVehicle.model}</p>
+                    <p>{formatVehicleLabel(assignedVehicle)}</p>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">No vehicle assigned.</p>
+                  <p className="text-sm text-gray-500">No assignment active.</p>
                 )}
+                <p className="text-xs text-gray-500">
+                  Telemetry vehicle: {formatVehicleLabel(telemetryVehicle) ?? 'None'}
+                </p>
                 <div className="text-sm text-gray-300">
                   <p>
                     <span className="text-gray-500">Latest odometer:</span>{' '}
@@ -487,7 +517,7 @@ export function DriverProfilePage() {
                           <TableCell className="text-gray-300">{totalHours.toFixed(1)}h</TableCell>
                           <TableCell className="text-gray-300">{breakCounts[shift.id] ?? 0}</TableCell>
                           <TableCell className="text-gray-300">
-                            {vehicle ? `${vehicle.plate_number} • ${vehicle.make}` : 'N/A'}
+                            {formatVehicleLabel(vehicle) ?? 'N/A'}
                           </TableCell>
                         </TableRow>
                       );
@@ -558,7 +588,7 @@ export function DriverProfilePage() {
                               : 'Current'}
                           </TableCell>
                           <TableCell className="text-gray-300">
-                            {vehicle ? `${vehicle.plate_number} • ${vehicle.make} ${vehicle.model}` : assignment.vehicle_id}
+                            {formatVehicleLabel(vehicle) ?? assignment.vehicle_id}
                           </TableCell>
                         </TableRow>
                       );
@@ -628,7 +658,7 @@ export function DriverProfilePage() {
                               : '—'}
                           </TableCell>
                           <TableCell className="text-gray-300">
-                            {vehicle ? `${vehicle.plate_number} • ${vehicle.make}` : log.vehicle_id}
+                            {formatVehicleLabel(vehicle) ?? log.vehicle_id}
                           </TableCell>
                           <TableCell className="text-gray-300">{log.reading ?? '—'}</TableCell>
                           <TableCell className="text-gray-300">

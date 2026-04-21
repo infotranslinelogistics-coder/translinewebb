@@ -6,9 +6,9 @@ import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/app/components/ui/alert-dialog';
-import { Search, Plus, Eye, CheckCircle, XCircle, Clock, Loader } from 'lucide-react';
+import { Search, Clock, Loader } from 'lucide-react';
 import { format } from 'date-fns';
-import { listShifts, listActiveShifts, Shift, countActiveShifts, countTodayShifts } from '@/lib/db/shifts';
+import { listShifts, Shift, countActiveShifts, countTodayShifts } from '@/lib/db/shifts';
 import { supabase } from '@/lib/supabase';
 
 export function ShiftsPage() {
@@ -43,74 +43,52 @@ export function ShiftsPage() {
     }
   }, []);
 
-  // Fetch shifts on mount
   useEffect(() => {
     fetchShifts();
   }, [fetchShifts]);
 
-  // Realtime subscription: re-fetch when any shift row changes
   useEffect(() => {
     const channel = supabase
       .channel('shifts-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'shifts' },
-        () => {
-          fetchShifts();
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, () => {
+        fetchShifts();
+      })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [fetchShifts]);
 
-  // Realtime subscription: re-fetch when a shift_events row is inserted
   useEffect(() => {
     const channel = supabase
-      .channel('shift-events')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'shift_events' },
-        () => {
-          fetchShifts();
-        }
-      )
+      .channel('shift-events-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shift_events' }, () => {
+        fetchShifts();
+      })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [fetchShifts]);
 
   const normalizedQuery = searchQuery.toLowerCase();
   const filteredShifts = shifts.filter((shift) => {
     const matchesSearch =
       (shift.driver_name ?? '').toLowerCase().includes(normalizedQuery) ||
-      (shift.vehicle_plate ?? '').toLowerCase().includes(normalizedQuery);
-
+      (shift.vehicle_rego ?? '').toLowerCase().includes(normalizedQuery);
     const matchesStatus = filterStatus === 'all' || shift.status === filterStatus;
-
     return matchesSearch && matchesStatus;
   });
 
   const handleEndShift = async () => {
     if (!selectedShift) return;
-
     try {
       const { error } = await supabase.rpc('force_end_shift', {
         p_shift_id: selectedShift.id,
         p_reason: endShiftReason || 'Ended by admin',
       });
       if (error) throw error;
-      setShifts(
-        shifts.map((s) =>
-          s.id === selectedShift.id
-            ? { ...s, status: 'ended', ended_at: new Date().toISOString() }
-            : s
-        )
-      );
+      setShifts(shifts.map((s) =>
+        s.id === selectedShift.id
+          ? { ...s, status: 'ended', ended_at: new Date().toISOString() }
+          : s
+      ));
       setActiveCount(Math.max(0, activeCount - 1));
       setEndShiftDialog(false);
       setSelectedShift(null);
@@ -129,14 +107,12 @@ export function ShiftsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Error message */}
       {error && (
         <Card className="bg-red-950 border-red-900">
           <CardContent className="p-4 text-red-400">{error}</CardContent>
         </Card>
       )}
 
-      {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Shifts</h1>
@@ -144,7 +120,6 @@ export function ShiftsPage() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="bg-[#161616] border-gray-800">
           <CardContent className="p-6">
@@ -166,7 +141,6 @@ export function ShiftsPage() {
         </Card>
       </div>
 
-      {/* Shifts table */}
       <Card className="bg-[#161616] border-gray-800">
         <CardHeader>
           <div className="flex flex-col gap-4">
@@ -189,39 +163,20 @@ export function ShiftsPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button
-                variant={filterStatus === 'all' ? 'default' : 'outline'}
-                onClick={() => setFilterStatus('all')}
-                className={
-                  filterStatus === 'all'
-                    ? 'bg-[#FF6B35] hover:bg-[#E55A2B] text-white'
-                    : 'border-gray-700 text-gray-400 hover:text-white'
-                }
-              >
-                All
-              </Button>
-              <Button
-                variant={filterStatus === 'active' ? 'default' : 'outline'}
-                onClick={() => setFilterStatus('active')}
-                className={
-                  filterStatus === 'active'
-                    ? 'bg-[#FF6B35] hover:bg-[#E55A2B] text-white'
-                    : 'border-gray-700 text-gray-400 hover:text-white'
-                }
-              >
-                Active
-              </Button>
-              <Button
-                variant={filterStatus === 'completed' ? 'default' : 'outline'}
-                onClick={() => setFilterStatus('completed')}
-                className={
-                  filterStatus === 'completed'
-                    ? 'bg-[#FF6B35] hover:bg-[#E55A2B] text-white'
-                    : 'border-gray-700 text-gray-400 hover:text-white'
-                }
-              >
-                Completed
-              </Button>
+              {(['all', 'active', 'completed'] as const).map((status) => (
+                <Button
+                  key={status}
+                  variant={filterStatus === status ? 'default' : 'outline'}
+                  onClick={() => setFilterStatus(status)}
+                  className={
+                    filterStatus === status
+                      ? 'bg-[#FF6B35] hover:bg-[#E55A2B] text-white'
+                      : 'border-gray-700 text-gray-400 hover:text-white'
+                  }
+                >
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </Button>
+              ))}
             </div>
           </div>
         </CardHeader>
@@ -253,20 +208,24 @@ export function ShiftsPage() {
                   ) : (
                     filteredShifts.map((shift) => (
                       <TableRow key={shift.id} className="border-gray-800">
-                        <TableCell className="font-medium text-white">{shift.driver_name}</TableCell>
-                        <TableCell className="text-gray-300">{shift.vehicle_plate}</TableCell>
+                        <TableCell className="font-medium text-white">
+                          {shift.driver_name ?? '—'}
+                        </TableCell>
+                        <TableCell className="text-gray-300">
+                          {shift.vehicle_rego ?? '—'}
+                        </TableCell>
                         <TableCell className="text-gray-300">
                           <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4 text-gray-500" />
-                            {format(new Date(shift.startTime), 'MMM dd, HH:mm')}
+                            {shift.started_at
+                              ? format(new Date(shift.started_at), 'MMM dd, HH:mm')
+                              : '—'}
                           </div>
                         </TableCell>
                         <TableCell className="text-gray-300">
-                          {shift.endTime ? (
-                            format(new Date(shift.endTime), 'MMM dd, HH:mm')
-                          ) : (
-                            <span className="text-yellow-400">In progress</span>
-                          )}
+                          {shift.ended_at
+                            ? format(new Date(shift.ended_at), 'MMM dd, HH:mm')
+                            : <span className="text-yellow-400">In progress</span>}
                         </TableCell>
                         <TableCell>
                           <Badge
@@ -306,7 +265,6 @@ export function ShiftsPage() {
         </CardContent>
       </Card>
 
-      {/* End Shift Confirmation Dialog */}
       <AlertDialog open={endShiftDialog} onOpenChange={handleEndShiftDialogChange}>
         <AlertDialogContent className="bg-[#161616] border-gray-800">
           <AlertDialogHeader>
@@ -329,7 +287,7 @@ export function ShiftsPage() {
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleEndShift}
-              className="bg-green-600 text-white hover:bg-green-700"
+              className="bg-red-600 text-white hover:bg-red-700"
             >
               End Shift
             </AlertDialogAction>

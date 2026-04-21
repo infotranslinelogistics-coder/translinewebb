@@ -170,6 +170,12 @@ export function LiveMapPage() {
     : selectedLocation?.vehicle_id
       ? vehicleMap.get(selectedLocation.vehicle_id)
       : null;
+  const formatVehicleLabel = (vehicle?: Vehicle | null) => {
+    if (!vehicle) return null;
+    const rego = vehicle.rego ?? 'Unknown rego';
+    const makeModel = [vehicle.make, vehicle.model].filter(Boolean).join(' ');
+    return makeModel ? `${rego} • ${makeModel}` : rego;
+  };
 
   const activeDrivers = filteredLocations.length;
 
@@ -291,7 +297,7 @@ export function LiveMapPage() {
                     <SelectItem value="all">All vehicles</SelectItem>
                     {vehicles.map((vehicle) => (
                       <SelectItem key={vehicle.id} value={vehicle.id}>
-                        {vehicle.plate_number} • {vehicle.make} {vehicle.model}
+                        {formatVehicleLabel(vehicle)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -318,8 +324,8 @@ export function LiveMapPage() {
                     </p>
                     <p className="text-xs text-gray-400">
                       {selectedVehicle
-                        ? `${selectedVehicle.plate_number} • ${selectedVehicle.make} ${selectedVehicle.model}`
-                        : 'Vehicle not assigned'}
+                        ? `Telemetry vehicle: ${formatVehicleLabel(selectedVehicle)}`
+                        : 'Telemetry vehicle unknown'}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">

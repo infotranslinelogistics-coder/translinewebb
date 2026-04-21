@@ -26,7 +26,6 @@ export interface Vehicle {
   plate_number: string;
   make: string;
   model: string;
-  assigned_driver_id?: string;
   status: 'active' | 'maintenance' | 'inactive';
   last_inspection_date?: string;
   created_at: string;

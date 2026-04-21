@@ -301,6 +301,135 @@ Post-deployment, monitor:
 
 ---
 
+## Assignment Lifecycle Verification (Supabase SQL Editor)
+
+Use this lightweight script to verify canonical assignment behavior using `vehicle_assignments`,
+`assign_vehicle`, and `unassign_driver`.
+
+### Prep: pick one active driver and two active vehicles
+
+```sql
+-- Pick test IDs (replace values after running these)
+SELECT id, full_name FROM public.drivers ORDER BY created_at DESC LIMIT 5;
+SELECT id, rego FROM public.vehicles WHERE status = 'active' ORDER BY created_at DESC LIMIT 10;
+```
+
+Set these placeholders for all queries below:
+- `<driver_id>`
+- `<vehicle_a_id>`
+- `<vehicle_b_id>`
+
+### 1) Assign vehicle
+
+```sql
+SELECT public.assign_vehicle('<driver_id>'::uuid, '<vehicle_a_id>'::uuid);
+
+SELECT driver_id, vehicle_id, assigned_at, unassigned_at
+FROM public.vehicle_assignments
+WHERE driver_id = '<driver_id>'::uuid
+ORDER BY assigned_at DESC
+LIMIT 5;
+```
+
+Expected:
+- newest row has `vehicle_id = <vehicle_a_id>`
+- exactly one active row for that driver (`unassigned_at IS NULL`)
+
+### 2) Reassign vehicle
+
+```sql
+SELECT public.assign_vehicle('<driver_id>'::uuid, '<vehicle_b_id>'::uuid);
+
+SELECT driver_id, vehicle_id, assigned_at, unassigned_at
+FROM public.vehicle_assignments
+WHERE driver_id = '<driver_id>'::uuid
+ORDER BY assigned_at DESC
+LIMIT 10;
+```
+
+Expected:
+- newest active row is `vehicle_b_id`
+- prior active row for `vehicle_a_id` is now closed (`unassigned_at` set)
+
+### 3) Unassign vehicle (by vehicle target)
+
+```sql
+SELECT public.assign_vehicle(NULL, '<vehicle_b_id>'::uuid);
+
+SELECT driver_id, vehicle_id, assigned_at, unassigned_at
+FROM public.vehicle_assignments
+WHERE vehicle_id = '<vehicle_b_id>'::uuid
+ORDER BY assigned_at DESC
+LIMIT 10;
+```
+
+Expected:
+- no active rows remain for `vehicle_b_id`
+
+### 4) Unassign driver (canonical driver-level RPC)
+
+```sql
+-- Create one active assignment first
+SELECT public.assign_vehicle('<driver_id>'::uuid, '<vehicle_a_id>'::uuid);
+
+-- Unassign all active assignments for the driver
+SELECT public.unassign_driver('<driver_id>'::uuid);
+
+-- Call again to verify idempotency
+SELECT public.unassign_driver('<driver_id>'::uuid);
+
+SELECT driver_id, vehicle_id, assigned_at, unassigned_at
+FROM public.vehicle_assignments
+WHERE driver_id = '<driver_id>'::uuid
+ORDER BY assigned_at DESC
+LIMIT 10;
+```
+
+Expected:
+- first call closes active row(s)
+- second call succeeds and changes nothing (idempotent)
+- no active rows remain for the driver
+
+### 5) Delete driver with active assignment
+
+```sql
+-- Create active assignment
+SELECT public.assign_vehicle('<driver_id>'::uuid, '<vehicle_a_id>'::uuid);
+
+-- Simulate portal flow: close active assignments then delete driver
+SELECT public.unassign_driver('<driver_id>'::uuid);
+DELETE FROM public.drivers WHERE id = '<driver_id>'::uuid;
+
+-- Verify no active assignments for deleted driver
+SELECT *
+FROM public.vehicle_assignments
+WHERE driver_id = '<driver_id>'::uuid AND unassigned_at IS NULL;
+```
+
+Expected:
+- driver deletion succeeds
+- no active assignment rows remain for deleted driver
+
+### Optional view-level sanity checks
+
+```sql
+-- Driver "current vehicle" should be empty after unassignment/deletion
+SELECT *
+FROM public.drivers_with_current_vehicle
+WHERE driver_id = '<driver_id>'::uuid;
+
+-- Vehicle-side current driver check
+SELECT *
+FROM public.vehicles_with_driver
+WHERE id IN ('<vehicle_a_id>'::uuid, '<vehicle_b_id>'::uuid)
+ORDER BY rego;
+```
+
+Expected:
+- views reflect assignment truth from `vehicle_assignments` state
+
+---
+
 **Status**: Ready for full testing suite
 **Date**: January 11, 2026
 **Changes**: 6 files modified/created

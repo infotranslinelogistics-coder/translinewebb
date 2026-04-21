@@ -105,7 +105,8 @@
 ### Database Tables Required
 These must exist in Supabase (check migrations if not present):
 - `drivers` (id, name, email, phone, status, created_at, updated_at)
-- `vehicles` (id, plate_number, make, model, assigned_driver_id, status, last_inspection_date, created_at, updated_at)
+- `vehicles` (id, plate_number, make, model, status, last_inspection_date, created_at, updated_at)
+- `vehicle_assignments` (id, driver_id, vehicle_id, assigned_at, unassigned_at) as the canonical assignment source of truth
 - `shifts` (id, driver_id, vehicle_id, start_time, end_time, notes, created_at, updated_at)
 - `maintenance_items` (id, vehicle_id, service_type, service_date, odometer, cost, provider, invoice_url, notes, status, created_at, updated_at)
 - `location_logs` (id, driver_id, shift_id, latitude, longitude, accuracy, speed, heading, timestamp, created_at)
