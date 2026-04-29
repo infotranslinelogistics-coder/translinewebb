@@ -1,24 +1,19 @@
-// Driver location data access layer (for live tracking)
 import { supabase } from '../supabase';
 
 export interface DriverLocation {
-  id: string;
   driver_id: string;
-  shift_id?: string | null;
-  vehicle_id?: string | null;
-  lat: number;
-  lng: number;
-  accuracy_m?: number | null;
-  speed_kmh?: number | null;
-  heading?: number | null;
-  recorded_at: string;
+  latitude: number;
+  longitude: number;
+  created_at: string;
 }
 
 export async function listLatestLocationsByDrivers(driverIds?: string[]): Promise<DriverLocation[]> {
-  const ids = Array.isArray(driverIds) ? driverIds : [];
-  let query = supabase.from('view_driver_latest_location').select('*');
-  if (ids.length > 0) {
-    query = query.in('driver_id', ids);
+  let query = supabase
+    .from('view_driver_latest_location')
+    .select('driver_id, latitude, longitude, created_at');
+
+  if (driverIds && driverIds.length > 0) {
+    query = query.in('driver_id', driverIds);
   }
 
   const { data, error } = await query;
@@ -27,38 +22,44 @@ export async function listLatestLocationsByDrivers(driverIds?: string[]): Promis
     return [];
   }
 
-  return (data as DriverLocation[]) || [];
+  console.log('listLatestLocationsByDrivers data:', data);
+  return (data as DriverLocation[]) ?? [];
 }
 
-export async function createLocationLog(
-  log: Omit<DriverLocation, 'id' | 'recorded_at'>
-): Promise<DriverLocation> {
-  const { data, error } = await supabase
-    .from('driver_locations')
-    .insert([log])
-    .select()
-    .single();
+// Real-time: subscribe to shift_events (source table the view reads from)
+// Views don't emit postgres_changes — must listen on the underlying table
+export function subscribeToLocationUpdates(callback: (row: DriverLocation) => void) {
+  return supabase
+    .channel('location_updates')
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'shift_events',
+        filter: 'event_type=eq.location',
+      },
+      (payload) => {
+        const row = payload.new as {
+          shift_id: string;
+          latitude: number;
+          longitude: number;
+          created_at: string;
+          metadata: Record<string, unknown> | null;
+        };
 
-  if (error) throw error;
-  return data as DriverLocation;
-}
+        // shift_events has no driver_id — resolve via metadata or a shifts lookup
+        // if your app writes driver_id into metadata, use that:
+        const driver_id = (row.metadata?.driver_id as string) ?? null;
+        if (!driver_id || !row.latitude || !row.longitude) return;
 
-export function subscribeToLocationUpdates(
-  callback: (log: DriverLocation) => void,
-  onError?: (error: Error) => void
-) {
-  const subscription = supabase
-    .channel('driver_locations')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_locations' }, (payload) => {
-      callback(payload.new as DriverLocation);
-    })
-    .subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        console.log('Subscribed to driver location updates');
-      } else if (status === 'CHANNEL_ERROR' && onError) {
-        onError(new Error('Failed to subscribe to driver location updates'));
+        callback({
+          driver_id,
+          latitude: row.latitude,
+          longitude: row.longitude,
+          created_at: row.created_at,
+        });
       }
-    });
-
-  return subscription;
+    )
+    .subscribe();
 }

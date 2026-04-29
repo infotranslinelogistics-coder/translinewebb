@@ -38,6 +38,9 @@ export interface Shift {
   started_at: string;
   ended_at: string | null;
   status: 'active' | 'ended' | 'cancelled';
+  checklist?: Record<string, 'pass' | 'fail' | null> | null;
+  driver_name?: string | null;
+  vehicle_rego?: string | null;
 }
 
 export interface ShiftChecklist {

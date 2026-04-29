@@ -1,8 +1,13 @@
 // Dashboard data access layer
 import { supabase } from '../supabase';
-import { countTotalDrivers, countActiveDrivers } from './drivers';
-import { countTotalVehicles, countActiveVehicles, countVehiclesInMaintenance } from './vehicles';
-import { countActiveShifts, countTodayShifts } from './shifts';
+import { countTotalDrivers } from './drivers';
+import { countTotalVehicles, countVehiclesInMaintenance } from './vehicles';
+import {
+  countActiveShifts,
+  countDistinctDriversOnActiveShifts,
+  countDistinctVehiclesOnActiveShifts,
+  countTodayShifts,
+} from './shifts';
 import { countPendingMaintenance } from './maintenance';
 
 export interface DashboardStats {
@@ -29,9 +34,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       pendingMaintenance,
     ] = await Promise.all([
       countTotalDrivers(),
-      countActiveDrivers(),
+      countDistinctDriversOnActiveShifts(),
       countTotalVehicles(),
-      countActiveVehicles(),
+      countDistinctVehiclesOnActiveShifts(),
       countVehiclesInMaintenance(),
       countActiveShifts(),
       countTodayShifts(),

@@ -142,14 +142,14 @@ export function DashboardPage() {
       name: 'Total Drivers',
       value: stats.totalDrivers.toString(),
       icon: Users,
-      change: `${stats.activeDrivers} online`,
+      change: `${stats.activeDrivers} on active shifts`,
       color: 'bg-blue-500',
     },
     {
       name: 'Total Vehicles',
       value: stats.totalVehicles.toString(),
       icon: Truck,
-      change: `${stats.activeVehicles} active`,
+      change: `${stats.activeVehicles} in active shifts`,
       color: 'bg-purple-500',
     },
     {
@@ -285,11 +285,11 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center p-3 bg-[#0F0F0F] rounded border border-gray-800">
-              <span className="text-gray-300">Drivers Active</span>
+              <span className="text-gray-300">Drivers on Active Shifts</span>
               <span className="text-lg font-bold text-[#FF6B35]">{stats.activeDrivers}/{stats.totalDrivers}</span>
             </div>
             <div className="flex justify-between items-center p-3 bg-[#0F0F0F] rounded border border-gray-800">
-              <span className="text-gray-300">Vehicles Active</span>
+              <span className="text-gray-300">Vehicles in Active Shifts</span>
               <span className="text-lg font-bold text-[#FF6B35]">{stats.activeVehicles}/{stats.totalVehicles}</span>
             </div>
             <div className="flex justify-between items-center p-3 bg-[#0F0F0F] rounded border border-gray-800">

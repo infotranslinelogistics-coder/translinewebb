@@ -1,200 +1,441 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
-import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
-import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
-import { MapPin, Loader, Search, RefreshCw, ExternalLink } from 'lucide-react';
-import { formatDistanceToNow, format } from 'date-fns';
-import { listLatestLocationsByDrivers, DriverLocation } from '@/lib/db/locations';
-import { listDrivers } from '@/lib/db/drivers';
-import { listVehicles, Vehicle } from '@/lib/db/vehicles';
+import { MapPin, Loader, Search, RefreshCw } from 'lucide-react';
+import { Driver, listDrivers } from '@/lib/db/drivers';
 import { supabase } from '@/lib/supabase';
-import { useDriverLiveState, isOnlineFromLastSeen, type DriverLiveStatus } from '@/lib/realtime/useDriverLiveState';
-
-const DEFAULT_CENTER: [number, number] = [37.7749, -122.4194];
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { listLatestLocationsByDrivers, subscribeToLocationUpdates } from '@/lib/db/locations';
+import { fetchShiftEvents } from '@/lib/db/shifts';
+import { fetchShiftsFull } from '@/lib/db/shifts';
+import { Badge } from '@/app/components/ui/badge';
 
 export function LiveMapPage() {
-  const { statusMap, setStatusMap, locationMap, setLocationMap } = useDriverLiveState();
-  const [drivers, setDrivers] = useState<any[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [locations, setLocations] = useState<Map<string, any>>(new Map());
   const [onlineOnly, setOnlineOnly] = useState(false);
-  const [gpsOnly, setGpsOnly] = useState(false);
   const [vehicleFilter, setVehicleFilter] = useState<string>('all');
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const routeLayerRef = useRef<L.Polyline | null>(null);
 
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markersRef = useRef<Map<string, any>>(new Map());
-  const hasCenteredRef = useRef(false);
-
-  const driverMap = useMemo(() => {
-    const map = new Map<string, any>();
-    drivers.forEach((driver) => {
-      const id = driver.id ?? driver.driver_id ?? driver.auth_user_id;
-      if (id) map.set(id, driver);
-    });
-    return map;
-  }, [drivers]);
-
-  const vehicleMap = useMemo(() => {
-    const map = new Map<string, Vehicle>();
-    vehicles.forEach((vehicle) => map.set(vehicle.id, vehicle));
-    return map;
-  }, [vehicles]);
-  const isOnline = (status?: DriverLiveStatus | null) =>
-    isOnlineFromLastSeen(status?.last_seen_at) || Boolean(status?.is_online);
-
-  const refreshData = async () => {
-    try {
-      setLoading(true);
-      const [driversList, locationsList, vehiclesList, statusList] = await Promise.all([
-        listDrivers(),
-        listLatestLocationsByDrivers(),
-        listVehicles(),
-        supabase.from('view_driver_current_status').select('*'),
-      ]);
-      setDrivers(driversList ?? []);
-      const nextLocationMap: Record<string, DriverLocation> = {};
-      (locationsList ?? []).forEach((location) => {
-        nextLocationMap[location.driver_id] = location;
-      });
-      setLocationMap(nextLocationMap);
-      setVehicles(vehiclesList ?? []);
-      const statusRows = (statusList.data as DriverLiveStatus[]) ?? [];
-      const nextStatusMap: Record<string, DriverLiveStatus> = {};
-      statusRows.forEach((row) => {
-        nextStatusMap[row.driver_id] = {
-          ...row,
-          is_online: isOnlineFromLastSeen(row.last_seen_at),
-        };
-      });
-      setStatusMap(nextStatusMap);
-      setLastUpdate(new Date());
-      setError(null);
-    } catch (err) {
-      setError('Failed to load location data');
-      console.error(err);
-    } finally {
-      setLoading(false);
+  const clearRoute = () => {
+    if (routeLayerRef.current && mapInstanceRef.current) {
+      mapInstanceRef.current.removeLayer(routeLayerRef.current);
+      routeLayerRef.current = null;
     }
   };
 
-  useEffect(() => {
-    refreshData();
+  function snapToRoute(
+    coords: [number, number][],
+    lat: number,
+    lng: number
+  ): [number, number] {
+    let minDist = Infinity;
+    let nearest: [number, number] = [lat, lng];
+    for (const [rlat, rlng] of coords) {
+      const d = Math.hypot(rlat - lat, rlng - lng);
+      if (d < minDist) { minDist = d; nearest = [rlat, rlng]; }
+    }
+    return nearest;
+  }
+
+  function formatDistance(meters: number): string {
+    return meters >= 1000
+      ? `${(meters / 1000).toFixed(2)} km`
+      : `${Math.round(meters)} m`;
+  }
+
+  function turnIcon(modifier: string): string {
+    const icons: Record<string, string> = {
+      left: '↰', right: '↱', 'slight left': '↖', 'slight right': '↗',
+      'sharp left': '⬅', 'sharp right': '➡', straight: '↑', uturn: '↩',
+    };
+    return icons[modifier] ?? '•';
+  }
+
+  function dotHtml(color: string, size = 12, glow = false): string {
+    return `<div style="
+      width:${size}px;height:${size}px;
+      background:${color};
+      border:2.5px solid #fff;
+      border-radius:50%;
+      box-shadow:0 0 0 2px ${color}55${glow ? `,0 0 10px ${color}` : ''};
+    "></div>`;
+  }
+
+  function popupCard(rows: { label: string; value: string }[], title?: string): string {
+    const body = rows.map(r => `
+      <div style="display:flex;justify-content:space-between;gap:16px;padding:4px 0;">
+        <span style="color:#6b7280;font-size:12px;white-space:nowrap;">${r.label}</span>
+        <span style="color:#111827;font-size:12px;font-weight:600;text-align:right;">${r.value}</span>
+      </div>`).join('');
+    return `
+      <div style="font-family:Inter,system-ui,sans-serif;min-width:200px;padding:2px;">
+        ${title ? `<div style="font-weight:700;font-size:13px;color:#1d4ed8;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #e5e7eb;">${title}</div>` : ''}
+        ${body}
+      </div>`;
+  }
+
+
+  const drawRouteForDriver = async (driverId: string) => {
+      const map = mapInstanceRef.current;
+      if (!map) return;
+
+      clearRoute();
+      setSelectedDriverId(driverId);
+      setRouteLoading(true);
+
+      // track all layers added so clearRoute can remove them
+      const extraLayers: L.Layer[] = [];
+      const addLayer = (l: L.Layer) => { extraLayers.push(l); l.addTo(map); };
+
+      // store cleanup alongside polyline
+      (routeLayerRef as any)._extra = extraLayers;
+
+      try {
+        const allShifts = await fetchShiftsFull();
+        const shift = allShifts.find(s =>
+          s.driver_id === driverId &&
+          s.start_lat != null && s.start_lng != null &&
+          s.end_lat != null && s.end_lng != null
+        );
+        if (!shift) return;
+
+        const url =
+          `https://router.project-osrm.org/route/v1/driving/` +
+          `${shift.start_lng},${shift.start_lat};${shift.end_lng},${shift.end_lat}` +
+          `?overview=full&geometries=geojson&steps=true`;
+
+        const res = await fetch(url);
+        const json = await res.json();
+        if (json.code !== 'Ok' || !json.routes?.[0]) return;
+
+        const route = json.routes[0];
+        const totalDistance: number = route.distance; // metres
+        const coords: [number, number][] = route.geometry.coordinates.map(
+          ([lng, lat]: [number, number]) => [lat, lng]
+        );
+
+        const isCompleted = shift.status === 'completed';
+        const routeColor = isCompleted ? '#1a1a2e' : '#ff6b35';
+
+        const polyline = L.polyline(coords, {
+          color: routeColor,
+          weight: 5,
+          opacity: 0.88,
+          lineJoin: 'round',
+          lineCap: 'round',
+        }).addTo(map);
+        routeLayerRef.current = polyline;
+
+        // ── shift times / duration ──────────────────────────────────────────────
+        const startedAt = shift.started_at ? new Date(shift.started_at) : null;
+        const endedAt   = shift.ended_at   ? new Date(shift.ended_at)   : new Date();
+        const durationMs = startedAt && endedAt ? endedAt.getTime() - startedAt.getTime() : 0;
+        const totalSec = Math.max(0, Math.floor(durationMs / 1000));
+        const durationText = `${Math.floor(totalSec / 3600)}h ${Math.floor((totalSec % 3600) / 60)}m`;
+        const fmt = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        // ── events (break + stops) ──────────────────────────────────────────────
+        const events = await fetchShiftEvents(shift.id);
+        const sorted = [...events].sort((a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+
+        // break status
+        let breakRows: { label: string; value: string }[] = [];
+        const lastBreakStart = [...sorted].reverse().find(e => e.event_type === 'break_start');
+        const breakEnd = sorted.find(e => e.event_type == "break_end");
+        if (lastBreakStart && !breakEnd) {
+          const bMs = Date.now() - new Date(lastBreakStart.created_at).getTime();
+          const bSec = Math.floor(bMs / 1000);
+          breakRows = [
+            { label: 'Break status', value: 'On Break' },
+            { label: 'Break duration', value: `${Math.floor(bSec / 60)}m ${bSec % 60}s` },
+          ];
+        }
+
+        // shared shift summary popup
+        const shiftPopupHtml = popupCard([
+          { label: 'Driver',    value: shift.driver_name ?? 'Unknown' },
+          { label: 'Vehicle',   value: shift.vehicle_rego ?? 'Unknown' },
+          { label: 'Started',   value: startedAt ? fmt(startedAt) : '-' },
+          { label: 'Duration',  value: durationText },
+          { label: 'Distance',  value: formatDistance(totalDistance) },
+          ...breakRows,
+        ], 'Shift Overview') +
+        `<a href="/portal/shifts/${shift.id}" style="
+            display:block;margin-top:10px;text-align:center;
+            background:#1d4ed8;color:#fff;text-decoration:none;
+            padding:8px;border-radius:8px;font-size:12px;font-weight:700;">
+          View Full Shift Details →
+        </a>`;
+
+        polyline.bindPopup(shiftPopupHtml, { maxWidth: 280, closeButton: false });
+        polyline.on('click', function (this: L.Polyline) { this.openPopup(); });
+
+        const snappedStart = snapToRoute(coords, Number(shift.start_lat), Number(shift.start_lng));
+        addLayer(
+          L.marker(snappedStart, {
+            icon: L.divIcon({ className: '', html: dotHtml('#22c55e', 16, true), iconSize: [16, 16], iconAnchor: [8, 8] }),
+          }).bindPopup(popupCard([
+            { label: 'Event',   value: 'Shift Start' },
+            { label: 'Time',    value: startedAt ? fmt(startedAt) : '-' },
+            { label: 'Driver',  value: shift.driver_name ?? '-' },
+            { label: 'Vehicle', value: shift.vehicle_rego ?? '-' },
+          ], 'Start Point'), { closeButton: false })
+        );
+
+        if (shift.end_lat != null && shift.end_lng != null) {
+          const snappedEnd = snapToRoute(coords, Number(shift.end_lat), Number(shift.end_lng));
+          addLayer(
+            L.marker(snappedEnd, {
+              icon: L.divIcon({ className: '', html: dotHtml('#ef4444', 16, true), iconSize: [16, 16], iconAnchor: [8, 8] }),
+            }).bindPopup(popupCard([
+              { label: 'Event',    value: 'Shift End' },
+              { label: 'Time',     value: endedAt ? fmt(endedAt) : '-' },
+              { label: 'Duration', value: durationText },
+              { label: 'Distance', value: formatDistance(totalDistance) },
+            ], 'End Point'), { closeButton: false })
+          );
+        }
+
+        // ── turn-by-turn markers ────────────────────────────────────────────────
+        const legs: any[] = route.legs ?? [];
+        const allSteps: any[] = legs.flatMap((leg: any) => leg.steps ?? []);
+
+        allSteps.forEach((step: any, i: number) => {
+          const [sLng, sLat] = step.maneuver.location;
+          const snapped = snapToRoute(coords, sLat, sLng);
+
+          const type: string     = step.maneuver.type ?? '';
+          const modifier: string = step.maneuver.modifier ?? 'straight';
+          const streetName: string = step.name || 'Unnamed road';
+
+          // skip depart/arrive — those are the start/end markers above
+          if (type === 'depart' || type === 'arrive') return;
+
+          const icon = turnIcon(modifier);
+          const markerHtml = `
+            <div style="
+              width:10px;height:10px;
+              background:white;
+              border:2px solid #fff;
+              border-radius:50%;
+              box-shadow:0 0 0 2px #1d4ed855;
+            "></div>`;
+
+          addLayer(
+            L.marker(snapped, {
+              icon: L.divIcon({ className: '', html: markerHtml, iconSize: [10, 10], iconAnchor: [5, 5] }),
+              zIndexOffset: 100,
+            }).bindPopup(
+              popupCard([
+                { label: 'Turn',     value: `${icon} ${modifier}` },
+                { label: 'Street',   value: streetName }
+              ], `Turn ${i + 1}`),
+              { closeButton: false }
+            )
+          );
+        });
+
+        // ── snapped STOP markers (amber) ────────────────────────────────────────
+        const MIN_STOP_MS = 3 * 60 * 1000;
+        const MIN_R = 50, MAX_R = 100;
+
+        events
+          .filter(e =>
+            e.event_type === 'stop_detected' &&
+            e.latitude != null && e.longitude != null && e.metadata
+          )
+          .forEach(stop => {
+            const meta = stop.metadata as any;
+            const startTime = meta?.start_time ? new Date(meta.start_time) : null;
+            const endTime   = meta?.end_time   ? new Date(meta.end_time)   : null;
+            if (!startTime || !endTime) return;
+
+            const durMs = endTime.getTime() - startTime.getTime();
+            if (durMs < MIN_STOP_MS) return;
+
+            const radius = Number(meta?.radius_m);
+            if (Number.isNaN(radius) || radius < MIN_R || radius > MAX_R) return;
+
+            const snapped = snapToRoute(coords, Number(stop.latitude), Number(stop.longitude));
+
+            const stopHtml = `
+              <div style="position:relative;width:18px;height:18px;">
+                <div style="
+                  position:absolute;inset:0;
+                  background:#f59e0b33;
+                  border-radius:50%;
+                  animation:pulse 1.4s ease-out infinite;
+                "></div>
+                ${dotHtml('#f59e0b', 14, true)}
+              </div>`;
+
+            addLayer(
+              L.marker(snapped, {
+                icon: L.divIcon({ className: '', html: stopHtml, iconSize: [18, 18], iconAnchor: [9, 9] }),
+                zIndexOffset: 200,
+              }).bindPopup(
+                popupCard([
+                  { label: 'Duration', value: `${Math.round(durMs / 60000)} min` },
+                  { label: 'Radius',   value: `${radius} m` },
+                ], 'Stop'),
+                { closeButton: false }
+              )
+            );
+          });
+
+        map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+
+      } catch (err) {
+        console.error('Route fetch failed:', err);
+      } finally {
+        setRouteLoading(false);
+      }
+  };
+
+  const markerIcon = useCallback((online: boolean | null) => {
+    return L.divIcon({
+      className: 'custom-marker',
+      html: `
+        <div style="
+          width: 14px;
+          height: 14px;
+          background: ${online ? '#2f659e' : '#c7c7c7'};
+          border: 3px solid white;
+          border-radius: 50%;
+          box-shadow: 0 0 10px rgba(59,130,246,0.6);
+        "></div>
+      `,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+    });
   }, []);
 
-  useEffect(() => {
-    if (Object.keys(locationMap).length > 0) {
-      setLastUpdate(new Date());
-    }
-  }, [locationMap]);
+  const vehicleOptions = useMemo(() => {
+    const set = new Set<string>();
+
+    drivers.forEach(d => {
+      if (d.current_vehicle_rego) {
+        set.add(d.current_vehicle_rego);
+      }
+    });
+
+    return Array.from(set);
+  }, [drivers]);
+
+  const gpsDrivers = useMemo(() => {
+    return drivers
+      .filter(driver => locations.has(driver.driver_id))
+
+      // online filter
+      .filter(driver => {
+        if (!onlineOnly) return true;
+        return driver.online_status === "online";
+      })
+
+      // vehicle filter
+      .filter(driver => {
+        if (vehicleFilter === 'all') return true;
+        return driver.current_vehicle_rego === vehicleFilter;
+      })
+
+      .map(driver => ({
+        ...driver,
+        location: locations.get(driver.driver_id)
+      }));
+  }, [drivers, locations, onlineOnly, vehicleFilter]);
 
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current || !window.L) return;
-    const map = window.L.map(mapRef.current, {
-      center: DEFAULT_CENTER,
-      zoom: 11,
+    if (!mapRef.current) return;
+    if (mapInstanceRef.current) return;
+
+    const map = L.map(mapRef.current, {
+      center: [-25.2744, 133.7751], // Australia
+      zoom: 4,
       zoomControl: true,
     });
-    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(map);
+
     mapInstanceRef.current = map;
+
+    const init = async () => {
+      try {
+        const driverRows = await listDrivers();
+        setDrivers(driverRows);
+
+        const rows = await listLatestLocationsByDrivers();
+        const locMap = new Map();
+
+        rows.forEach((loc) => {
+          locMap.set(loc.driver_id, loc);
+
+          const marker = L.marker(
+            [loc.latitude, loc.longitude],
+            { icon: markerIcon(driverRows.find((d) => d.driver_id === loc.driver_id)?.online_status == "online")}
+          ).addTo(map);
+
+          marker.on('click', () => drawRouteForDriver(loc.driver_id));
+
+          markersRef.current.set(loc.driver_id, marker);
+        });
+
+        setLocations(locMap);
+      } catch (err) {
+        console.error(err);
+      } 
+    };
+
+    init();
+
+    const channel = subscribeToLocationUpdates((loc) => {
+      const map = mapInstanceRef.current;
+      if (!map) return;
+
+      setLocations((prev) => {
+        const next = new Map(prev);
+        next.set(loc.driver_id, loc);
+        return next;
+      });
+
+      const existing = markersRef.current.get(loc.driver_id);
+      if (existing) {
+        existing.setLatLng([loc.latitude, loc.longitude]);
+      } else {
+        const marker = L.marker([loc.latitude, loc.longitude], { icon: markerIcon(drivers.find((d) => d.driver_id === loc.driver_id)?.online_status == "online") }).addTo(map);
+        marker.on('click', () => drawRouteForDriver(loc.driver_id));
+        markersRef.current.set(loc.driver_id, marker);
+      }
+    });
 
     return () => {
       map.remove();
+      mapInstanceRef.current = null;
+      supabase.removeChannel(channel);
+      routeLayerRef.current = null;
     };
-  }, []);
+  }, [markerIcon]);
 
-  const locationList = useMemo(() => Object.values(locationMap), [locationMap]);
-
-  const filteredLocations = useMemo(() => {
-    return locationList.filter((loc) => {
-      const driver = driverMap.get(loc.driver_id);
-      const driverName = (driver?.name ?? driver?.full_name ?? '').toLowerCase();
-      const matchesSearch = driverName.includes(searchQuery.toLowerCase());
-      const status = statusMap[loc.driver_id];
-      const online = isOnline(status);
-      const isGpsRecent = new Date(loc.recorded_at) > new Date(Date.now() - 5 * 60 * 1000);
-      const matchesOnline = !onlineOnly || online;
-      const matchesGps = !gpsOnly || isGpsRecent;
-      const matchesVehicle =
-        vehicleFilter === 'all' || status?.vehicle_id === vehicleFilter || loc.vehicle_id === vehicleFilter;
-      return matchesSearch && matchesOnline && matchesGps && matchesVehicle && isGpsRecent;
-    });
-  }, [locationList, driverMap, searchQuery, onlineOnly, gpsOnly, vehicleFilter, statusMap]);
-
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map || !window.L) return;
-
-    markersRef.current.forEach((marker) => {
-      map.removeLayer(marker);
-    });
-    markersRef.current.clear();
-
-    filteredLocations.forEach((loc) => {
-      const status = statusMap[loc.driver_id];
-      const online = isOnline(status);
-      const isStale = new Date(loc.recorded_at) < new Date(Date.now() - 5 * 60 * 1000);
-      const color = online ? (isStale ? '#F59E0B' : '#22C55E') : '#6B7280';
-      const marker = window.L.marker([loc.lat, loc.lng], {
-        icon: window.L.divIcon({
-          className: 'driver-marker',
-          html: `<div style="background:${color};width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 6px rgba(0,0,0,0.45)"></div>`,
-        }),
-      });
-      marker.addTo(map);
-      marker.on('click', () => setSelectedDriverId(loc.driver_id));
-      markersRef.current.set(loc.driver_id, marker);
-    });
-
-    if (!hasCenteredRef.current && filteredLocations.length > 0) {
-      const bounds = window.L.latLngBounds(filteredLocations.map((loc) => [loc.lat, loc.lng]));
-      map.fitBounds(bounds, { padding: [40, 40] });
-      hasCenteredRef.current = true;
-    }
-  }, [filteredLocations, statusMap]);
-
-  const selectedLocation = selectedDriverId ? locationMap[selectedDriverId] : null;
-  const selectedDriver = selectedDriverId ? driverMap.get(selectedDriverId) : null;
-  const selectedStatus = selectedDriverId ? statusMap[selectedDriverId] : null;
-  const selectedVehicle = selectedStatus?.vehicle_id
-    ? vehicleMap.get(selectedStatus.vehicle_id)
-    : selectedLocation?.vehicle_id
-      ? vehicleMap.get(selectedLocation.vehicle_id)
-      : null;
-  const formatVehicleLabel = (vehicle?: Vehicle | null) => {
-    if (!vehicle) return null;
-    const rego = vehicle.rego ?? 'Unknown rego';
-    const makeModel = [vehicle.make, vehicle.model].filter(Boolean).join(' ');
-    return makeModel ? `${rego} • ${makeModel}` : rego;
-  };
-
-  const activeDrivers = filteredLocations.length;
-
-  const handleRefresh = async () => {
-    await refreshData();
-  };
-
-  const getLastUpdateLabel = (dateString?: string | null) => {
-    if (!dateString) return 'No update';
-    return formatDistanceToNow(new Date(dateString), { addSuffix: true });
-  };
 
   return (
     <div className="space-y-6">
-      {error && (
+      {/* {error && (
         <Card className="bg-red-950 border-red-900">
           <CardContent className="p-4 text-red-400">{error}</CardContent>
         </Card>
-      )}
+      )} */}
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -202,28 +443,12 @@ export function LiveMapPage() {
           <p className="text-gray-400">Real-time driver and vehicle tracking</p>
         </div>
         <Button
-          onClick={handleRefresh}
-          disabled={loading}
           className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
         >
           <RefreshCw className="w-4 h-4 mr-2" />
           Refresh
         </Button>
       </div>
-
-      {lastUpdate && (
-        <Card className="bg-[#161616] border-gray-800">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-              <span className="text-sm text-gray-400">
-                Last updated: {format(lastUpdate, 'MMM dd, HH:mm:ss')}
-              </span>
-            </div>
-            <span className="text-sm font-medium text-green-400">{activeDrivers} Active</span>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <Card className="bg-[#161616] border-gray-800 lg:col-span-3">
@@ -237,26 +462,28 @@ export function LiveMapPage() {
               </div>
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <Input
+                {/* <Input
                   type="search"
                   placeholder="Search drivers..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
-                />
+                /> */}
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            {loading && locationList.length === 0 ? (
-              <div className="flex justify-center py-16">
-                <Loader className="w-8 h-8 text-[#FF6B35] animate-spin" />
-              </div>
-            ) : (
-              <div className="h-[520px] rounded-lg overflow-hidden border border-gray-800">
-                <div ref={mapRef} className="h-full w-full" />
+            {routeLoading && (
+              <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-black/40 rounded-lg">
+                <div className="flex items-center gap-2 bg-[#161616] px-4 py-2 rounded-lg border border-gray-700">
+                  <Loader className="w-4 h-4 text-[#3B82F6] animate-spin" />
+                  <span className="text-sm text-gray-300">Loading route...</span>
+                </div>
               </div>
             )}
+              <div className="h-[520px] relative">
+                <div ref={mapRef} className="absolute inset-0" />
+              </div>
           </CardContent>
         </Card>
 
@@ -278,26 +505,19 @@ export function LiveMapPage() {
                   className="h-4 w-4 rounded border-gray-700 bg-[#0F0F0F]"
                 />
               </div>
-              <div className="flex items-center justify-between">
-                <Label className="text-gray-300">GPS active only</Label>
-                <input
-                  type="checkbox"
-                  checked={gpsOnly}
-                  onChange={(e) => setGpsOnly(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-700 bg-[#0F0F0F]"
-                />
-              </div>
               <div className="space-y-2">
                 <Label className="text-gray-300">Vehicle</Label>
                 <Select value={vehicleFilter} onValueChange={setVehicleFilter}>
                   <SelectTrigger className="bg-[#0F0F0F] border-gray-700 text-white">
                     <SelectValue placeholder="All vehicles" />
                   </SelectTrigger>
+
                   <SelectContent>
                     <SelectItem value="all">All vehicles</SelectItem>
-                    {vehicles.map((vehicle) => (
-                      <SelectItem key={vehicle.id} value={vehicle.id}>
-                        {formatVehicleLabel(vehicle)}
+
+                    {vehicleOptions.map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {v}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -308,131 +528,58 @@ export function LiveMapPage() {
 
           <Card className="bg-[#161616] border-gray-800">
             <CardHeader>
-              <CardTitle className="text-white">Selected Driver</CardTitle>
-              <CardDescription className="text-gray-400">
-                Click a pin to view details
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!selectedLocation ? (
-                <p className="text-sm text-gray-500">No driver selected.</p>
-              ) : (
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-lg font-semibold text-white">
-                      {selectedDriver?.name || selectedDriver?.full_name || 'Driver'}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {selectedVehicle
-                        ? `Telemetry vehicle: ${formatVehicleLabel(selectedVehicle)}`
-                        : 'Telemetry vehicle unknown'}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {isOnline(selectedStatus) ? (
-                      <Badge className="bg-green-950 text-green-400 border-green-900">
-                        Online
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-gray-900 text-gray-300 border-gray-700">Offline</Badge>
-                    )}
-                    {selectedStatus?.on_break ? (
-                      <Badge className="bg-amber-950 text-amber-300 border-amber-800">On Break</Badge>
-                    ) : null}
-                    {selectedStatus?.status_state ? (
-                      <Badge className="bg-blue-950 text-blue-300 border-blue-800">
-                        {selectedStatus.status_state}
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <div className="space-y-1 text-sm text-gray-300">
-                    <p>
-                      <span className="text-gray-500">Last update:</span>{' '}
-                      {getLastUpdateLabel(selectedLocation.recorded_at)}
-                    </p>
-                    <p>
-                      <span className="text-gray-500">Speed:</span>{' '}
-                      {selectedLocation.speed_kmh ? `${selectedLocation.speed_kmh.toFixed(1)} km/h` : 'N/A'}
-                    </p>
-                    <p>
-                      <span className="text-gray-500">Heading:</span>{' '}
-                      {selectedLocation.heading ? `${selectedLocation.heading.toFixed(0)}°` : 'N/A'}
-                    </p>
-                  </div>
-                  <Button
-                    asChild
-                    className="w-full bg-[#0F0F0F] border border-gray-700 text-gray-200 hover:bg-[#1F1F1F]"
-                  >
-                    <a
-                      href={`https://www.google.com/maps?q=${selectedLocation.lat},${selectedLocation.lng}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      Open in Google Maps
-                    </a>
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-[#161616] border-gray-800">
-            <CardHeader>
               <CardTitle className="text-white">Active Drivers</CardTitle>
               <CardDescription className="text-gray-400">
-                {activeDrivers} drivers sharing GPS
+                {String(gpsDrivers.length)} drivers sharing GPS
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {loading && locationList.length === 0 ? (
+                {false ? (
                   <div className="flex justify-center py-4">
                     <Loader className="w-6 h-6 text-[#FF6B35] animate-spin" />
                   </div>
-                ) : filteredLocations.length === 0 ? (
-                  <p className="text-gray-500 text-sm py-4">No drivers found</p>
-                ) : (
-                  filteredLocations.map((location) => {
-                    const driver = driverMap.get(location.driver_id);
-                    const status = statusMap[location.driver_id];
-                    const online = isOnline(status);
-                    const isStale =
-                      new Date(location.recorded_at) < new Date(Date.now() - 5 * 60 * 1000);
-                    return (
-                      <button
-                        type="button"
-                        key={location.id}
-                        onClick={() => setSelectedDriverId(location.driver_id)}
-                        className="w-full text-left p-3 bg-[#0F0F0F] rounded-lg border border-gray-800 hover:border-[#FF6B35] transition-colors"
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="min-w-0">
-                            <p className="font-medium text-white truncate">
-                              {driver?.name || driver?.full_name || 'Unknown'}
-                            </p>
-                            <p className="text-xs text-gray-400 truncate">{driver?.email}</p>
-                          </div>
-                          <Badge className="ml-2 flex-shrink-0 bg-green-950 text-green-400 border-green-900 text-xs">
-                            <div className="w-1.5 h-1.5 bg-green-400 rounded-full mr-1 animate-pulse" />
-                            {online ? 'Online' : 'Offline'}
+                ) :
+                  gpsDrivers.map((driver) => (
+                    <button
+                      type="button"
+                      key={driver.driver_id}
+                      onClick={() => drawRouteForDriver(driver.driver_id)}
+                      className={`w-full text-left p-3 bg-[#0F0F0F] rounded-lg border transition-colors ${
+                        selectedDriverId === driver.driver_id
+                          ? 'border-[#3B82F6]'
+                          : 'border-gray-800 hover:border-[#FF6B35]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-white truncate">
+                            {driver?.full_name || 'Unknown'}
+                          </p>
+                          
+                          <p className="text-gray-400 text-xs mb-2"> Current Vehicle: {driver.current_vehicle_rego}</p>
+                          {driver.online_status === 'online' ? (
+                          <>
+                          <p className="text-gray-400 text-xs mb-2"> Device ID: {driver.device_id}</p>
+                          <Badge className="bg-green-950 text-green-400 border-green-900">
+                            Online
                           </Badge>
+                          </>
+                        ) : (
+                          <Badge className="bg-amber-950 text-amber-300 border-amber-800">
+                            Offline
+                          </Badge>
+                        )}
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <MapPin className="w-3 h-3 text-[#FF6B35] flex-shrink-0" />
-                          <span>
-                            {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
-                          </span>
-                          {isStale && (
-                            <Badge className="bg-amber-950 text-amber-300 border-amber-800 text-[10px]">
-                              Stale
-                            </Badge>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })
-                )}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <MapPin className="w-3 h-3 text-[#FF6B35] flex-shrink-0" />
+                        <span>
+                          {driver.location?.latitude?.toFixed(4)}, {driver.location?.longitude?.toFixed(4)}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
               </div>
             </CardContent>
           </Card>

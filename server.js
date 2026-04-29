@@ -15,6 +15,7 @@ app.use(express.json());
 
 // Admin API routes
 app.post('/admin/create-driver', createDriver);
+app.post('/api/admin/create-driver', createDriver);
 
 // IMPORTANT: Portal MUST come BEFORE main site static files and catch-alls
 

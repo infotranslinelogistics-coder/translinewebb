@@ -1,5 +1,5 @@
 // Driver logs and incident reports page
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
@@ -7,24 +7,56 @@ import { Input } from '@/app/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
 import { Search, Eye, AlertCircle, Wrench, AlertTriangle, FileText } from 'lucide-react';
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router';
 
 
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
+type LogType = 'incident' | 'maintenance' | 'accident' | 'general';
+type FilterType = 'all' | LogType;
+
+const severityWeight: Record<string, number> = {
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
+function normalizeLogType(rawType?: string | null): LogType {
+  const value = (rawType ?? '').toLowerCase();
+  if (value === 'incident') return 'incident';
+  if (value === 'maintenance' || value === 'maintenance_issue') return 'maintenance';
+  if (value === 'accident') return 'accident';
+  return 'general';
+}
+
+function getLogTypeLabel(type: LogType): string {
+  switch (type) {
+    case 'incident':
+      return 'Incidents';
+    case 'maintenance':
+      return 'Maintenance';
+    case 'accident':
+      return 'Accidents';
+    default:
+      return 'General';
+  }
+}
+
 export interface DriverLog {
   id: string;
   driver_name: string;
   vehicle_plate: string;
-  log_type: string;
+  log_type: LogType;
   description: string;
   created_at: string;
   severity: string;
 }
 
 export function LogsPage() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'incident' | 'maintenance_issue' | 'accident' | 'general'>('all');
+  const [filterType, setFilterType] = useState<FilterType>('all');
   const [logs, setLogs] = useState<DriverLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +70,11 @@ export function LogsPage() {
           .select('*')
           .order('created_at', { ascending: false });
         if (error) throw error;
-        setLogs(data || []);
+        const normalizedLogs = (data || []).map((row) => ({
+          ...row,
+          log_type: normalizeLogType(row.log_type),
+        })) as DriverLog[];
+        setLogs(normalizedLogs);
       } catch (err) {
         setError('Failed to load logs');
       } finally {
@@ -61,11 +97,24 @@ export function LogsPage() {
     return matchesSearch && matchesType;
   });
 
+  const sortedLogs = useMemo(() => {
+    return [...filteredLogs].sort((a, b) => {
+      const dateDelta = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (dateDelta !== 0) return dateDelta;
+
+      return (severityWeight[b.severity?.toLowerCase()] ?? 0) - (severityWeight[a.severity?.toLowerCase()] ?? 0);
+    });
+  }, [filteredLogs]);
+
+  const handleMaintenanceRoute = () => {
+    navigate('/maintenance');
+  };
+
   const getLogIcon = (type: string) => {
     switch (type) {
       case 'incident':
         return AlertCircle;
-      case 'maintenance_issue':
+      case 'maintenance':
         return Wrench;
       case 'accident':
         return AlertTriangle;
@@ -78,7 +127,7 @@ export function LogsPage() {
     switch (type) {
       case 'incident':
         return 'bg-orange-950 text-orange-400 border-orange-900';
-      case 'maintenance_issue':
+      case 'maintenance':
         return 'bg-yellow-950 text-yellow-400 border-yellow-900';
       case 'accident':
         return 'bg-red-950 text-red-400 border-red-900';
@@ -124,9 +173,9 @@ export function LogsPage() {
         </Card>
         <Card className="bg-[#161616] border-gray-800">
           <CardContent className="p-6">
-            <p className="text-sm text-gray-400 mb-1">Maintenance Issues</p>
+            <p className="text-sm text-gray-400 mb-1">Maintenance</p>
             <p className="text-3xl font-bold text-yellow-400">
-              {logs.filter((l) => l.log_type === 'maintenance_issue').length}
+              {logs.filter((l) => l.log_type === 'maintenance').length}
             </p>
           </CardContent>
         </Card>
@@ -186,10 +235,10 @@ export function LogsPage() {
                 Incidents
               </Button>
               <Button
-                variant={filterType === 'maintenance_issue' ? 'default' : 'outline'}
-                onClick={() => setFilterType('maintenance_issue')}
+                variant={filterType === 'maintenance' ? 'default' : 'outline'}
+                onClick={() => setFilterType('maintenance')}
                 className={
-                  filterType === 'maintenance_issue'
+                  filterType === 'maintenance'
                     ? 'bg-[#FF6B35] hover:bg-[#E55A2B] text-white'
                     : 'border-gray-700 text-gray-400 hover:text-white'
                 }
@@ -236,14 +285,18 @@ export function LogsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredLogs.map((log) => {
+                {sortedLogs.map((log) => {
                   const Icon = getLogIcon(log.log_type);
                   return (
-                    <TableRow key={log.id} className="border-gray-800">
+                    <TableRow
+                      key={log.id}
+                      className="border-gray-800"
+                      onClick={log.log_type === 'maintenance' ? handleMaintenanceRoute : undefined}
+                    >
                       <TableCell>
                         <Badge className={getLogTypeBadge(log.log_type)}>
                           <Icon className="w-3 h-3 mr-1" />
-                          {log.log_type?.replace('_', ' ')}
+                          {getLogTypeLabel(log.log_type)}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-medium text-white">{log.driver_name}</TableCell>
@@ -265,6 +318,12 @@ export function LogsPage() {
                             variant="ghost"
                             size="sm"
                             className="text-gray-400 hover:text-white h-8 w-8 p-0"
+                            onClick={() => {
+                              if (log.log_type === 'maintenance') {
+                                handleMaintenanceRoute();
+                                return;
+                              }
+                            }}
                           >
                             <Eye className="w-4 h-4" />
                           </Button>

@@ -113,13 +113,9 @@ export function useDriverLiveState() {
         ...prev,
         [newLocation.driver_id]: {
           ...existing,
-          last_location_at: newLocation.recorded_at,
-          lat: newLocation.lat,
-          lng: newLocation.lng,
-          speed_kmh: newLocation.speed_kmh ?? null,
-          heading: newLocation.heading ?? null,
-          vehicle_id: newLocation.vehicle_id ?? existing.vehicle_id,
-          shift_id: newLocation.shift_id ?? existing.shift_id,
+          last_location_at: newLocation.created_at,
+          lat: newLocation.latitude,
+          lng: newLocation.longitude
         },
       };
     });

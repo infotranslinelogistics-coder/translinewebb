@@ -3,6 +3,8 @@ import { createServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import http from 'http';
+import { createDriver } from './server/admin/createDriver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,6 +13,13 @@ const PORT = 5173;
 
 async function setupDevServer() {
   const app = express();
+  const httpServer = http.createServer(app);
+
+  app.use(express.json());
+
+  // Admin API routes used by portal pages in dev.
+  app.post('/api/admin/create-driver', createDriver);
+  app.post('/admin/create-driver', createDriver);
 
   let viteMain, vitePortal;
 
@@ -18,14 +27,26 @@ async function setupDevServer() {
     // Portal Vite server - MUST create first with correct root
     // root="portal" means Vite's "/" is /workspaces/Translineweb/portal/
     vitePortal = await createServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: {
+          server: httpServer,
+          path: '/portal-hmr',
+        },
+      },
       appType: 'spa',
       root: path.resolve(__dirname, 'portal'),
     });
 
     // Main Vite server - root defaults to /workspaces/Translineweb/
     viteMain = await createServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: {
+          server: httpServer,
+          path: '/main-hmr',
+        },
+      },
       appType: 'spa',
     });
   } catch (error) {
@@ -79,7 +100,7 @@ async function setupDevServer() {
 
   // Start the server
   await new Promise(resolve => {
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`\n✅ Dev server running!\n`);
       console.log(`   Main site:    http://localhost:${PORT}`);
       console.log(`   Admin portal: http://localhost:${PORT}/portal\n`);

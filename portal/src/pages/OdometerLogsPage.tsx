@@ -10,7 +10,7 @@ import { Download, Image as ImageIcon, Loader, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { listVehicles, Vehicle } from '@/lib/db/vehicles';
-import { fetchDriverOptions } from '@/lib/drivers';
+import { listDrivers } from '@/lib/db/drivers';
 import { clearOdometerPhotoCache, getOdometerPhotoUrl } from '@/lib/storage/odometerPhotos';
 
 interface OdometerLogRow {
@@ -78,7 +78,7 @@ export function OdometerLogsPage() {
 
   const fetchFilters = async () => {
     const [driverOptions, vehicleOptions, shiftOptions] = await Promise.all([
-      fetchDriverOptions(),
+      listDrivers(),
       listVehicles(),
       supabase.from('shifts').select('id, driver_id, vehicle_id, started_at, ended_at').order('started_at', { ascending: false }).limit(200),
     ]);

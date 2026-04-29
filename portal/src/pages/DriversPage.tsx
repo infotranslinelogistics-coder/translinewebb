@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Search, UserPlus, Trash2, Loader, Eye, Key } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useDriverLiveState, isOnlineFromLastSeen, type DriverLiveStatus } from '@/lib/realtime/useDriverLiveState';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceStrict, formatDistanceToNow } from 'date-fns';
 
 type ShiftRow = {
   id: string;
@@ -21,6 +21,18 @@ type ShiftRow = {
   started_at: string;
   ended_at: string | null;
   status: 'active' | 'ended' | 'cancelled';
+};
+
+type ShiftBreakEventRow = {
+  shift_id: string;
+  event_type: 'break_start' | 'break_end';
+  created_at: string;
+};
+
+type DriverCurrentStatusRow = {
+  driver_id: string;
+  status: string | null;
+  shift_id: string | null;
 };
 
 type VehicleOption = {
@@ -64,16 +76,22 @@ export function DriversPage() {
   const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
   const { statusMap, setStatusMap } = useDriverLiveState();
   const [activeShiftMap, setActiveShiftMap] = useState<Record<string, ShiftRow>>({});
+  const [breakByShiftId, setBreakByShiftId] = useState<Record<string, boolean>>({});
   const [selectedDriver, setSelectedDriver] = useState<DriverRow | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [passwordDriver, setPasswordDriver] = useState<DriverRow | null>(null);
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [durationNow, setDurationNow] = useState(() => Date.now());
   const resolveDriverId = (driver: DriverRow) =>
     driver.driver_id ?? driver.id ?? driver.auth_user_id;
-  const isOnline = (status?: DriverLiveStatus) =>
-    isOnlineFromLastSeen(status?.last_seen_at) || Boolean(status?.is_online);
+  const getShiftDurationLabel = (shift?: ShiftRow) => {
+    if (!shift?.started_at) return 'No active shift';
+    const startedAt = new Date(shift.started_at);
+    if (Number.isNaN(startedAt.getTime())) return 'No active shift';
+    return formatDistanceStrict(startedAt, durationNow, { roundingMethod: 'floor' });
+  };
 
   async function fetchDrivers() {
     const { data, error: driversError } = await supabase
@@ -164,8 +182,13 @@ export function DriversPage() {
       const [driversData, vehiclesData, statusResponse, shiftsResponse] = await Promise.all([
         fetchDrivers(),
         fetchVehicles(),
-        supabase.from('view_driver_current_status').select('*'),
-        supabase.from('shifts').select('*').or('status.eq.active,ended_at.is.null'),
+        supabase
+          .from('view_driver_current_status')
+          .select('driver_id, status, shift_id'),
+        supabase
+          .from('shifts')
+          .select('id, driver_id, vehicle_id, started_at, ended_at, status')
+          .or('status.eq.active,ended_at.is.null'),
       ]);
 
       setDrivers(driversData as DriverRow[]);
@@ -173,12 +196,23 @@ export function DriversPage() {
       setTotalCount(driversData.length);
       setActiveCount(countDriversByStatus(driversData as DriverRow[], 'active'));
 
-      const statusRows = (statusResponse.data as DriverLiveStatus[]) ?? [];
+      const statusRows = (statusResponse.data as DriverCurrentStatusRow[]) ?? [];
       const nextStatusMap: Record<string, DriverLiveStatus> = {};
       statusRows.forEach((row) => {
         nextStatusMap[row.driver_id] = {
-          ...row,
-          is_online: isOnlineFromLastSeen(row.last_seen_at),
+          driver_id: row.driver_id,
+          last_seen_at: null,
+          is_online: false,
+          status_state: row.status ?? null,
+          on_break: null,
+          status_started_at: null,
+          last_location_at: null,
+          lat: null,
+          lng: null,
+          speed_kmh: null,
+          heading: null,
+          vehicle_id: null,
+          shift_id: row.shift_id ?? null,
         };
       });
       setStatusMap(nextStatusMap);
@@ -189,6 +223,28 @@ export function DriversPage() {
         nextShiftMap[row.driver_id] = row;
       });
       setActiveShiftMap(nextShiftMap);
+
+      const shiftIds = activeShiftRows.map((row) => row.id);
+      const nextBreakByShiftId: Record<string, boolean> = {};
+      if (shiftIds.length > 0) {
+        const { data: breakEventsData, error: breakEventsError } = await supabase
+          .from('shift_events')
+          .select('shift_id, event_type, created_at')
+          .in('shift_id', shiftIds)
+          .in('event_type', ['break_start', 'break_end'])
+          .order('created_at', { ascending: false });
+
+        if (breakEventsError) {
+          console.error('fetch shift_events break status error:', breakEventsError);
+        } else {
+          ((breakEventsData as ShiftBreakEventRow[]) ?? []).forEach((event) => {
+            if (nextBreakByShiftId[event.shift_id] === undefined) {
+              nextBreakByShiftId[event.shift_id] = event.event_type === 'break_start';
+            }
+          });
+        }
+      }
+      setBreakByShiftId(nextBreakByShiftId);
       setError(null);
     } catch (err) {
       setError('Failed to load drivers or vehicles');
@@ -203,6 +259,14 @@ export function DriversPage() {
     loadPage();
   }, []);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setDurationNow(Date.now());
+    }, 60 * 1000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
   const filteredDrivers = drivers.filter(
     (driver) =>
       (driver.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -214,16 +278,21 @@ export function DriversPage() {
     return [...filteredDrivers].sort((a, b) => {
       const aId = resolveDriverId(a);
       const bId = resolveDriverId(b);
-      const aStatus = aId ? statusMap[aId] : undefined;
-      const bStatus = bId ? statusMap[bId] : undefined;
-      const aOnline = isOnline(aStatus) ? 1 : 0;
-      const bOnline = isOnline(bStatus) ? 1 : 0;
-      if (aOnline !== bOnline) return bOnline - aOnline;
-      const aLastSeen = aStatus?.last_seen_at ? new Date(aStatus.last_seen_at).getTime() : 0;
-      const bLastSeen = bStatus?.last_seen_at ? new Date(bStatus.last_seen_at).getTime() : 0;
-      return bLastSeen - aLastSeen;
+      const aShift = aId ? activeShiftMap[aId] : undefined;
+      const bShift = bId ? activeShiftMap[bId] : undefined;
+      const aActive = aShift ? 1 : 0;
+      const bActive = bShift ? 1 : 0;
+      if (aActive !== bActive) return bActive - aActive;
+
+      const aStartedAt = aShift?.started_at ? new Date(aShift.started_at).getTime() : 0;
+      const bStartedAt = bShift?.started_at ? new Date(bShift.started_at).getTime() : 0;
+      if (aStartedAt !== bStartedAt) return bStartedAt - aStartedAt;
+
+      return (a.full_name ?? a.profile_email ?? a.email ?? '').localeCompare(
+        b.full_name ?? b.profile_email ?? b.email ?? ''
+      );
     });
-  }, [filteredDrivers, resolveDriverId, statusMap]);
+  }, [filteredDrivers, resolveDriverId, activeShiftMap]);
 
   // Add driver via Supabase Auth (creates profile automatically)
   const handleAddDriver = async () => {
@@ -414,7 +483,7 @@ export function DriversPage() {
             <div>
               <CardTitle className="text-white">All Drivers</CardTitle>
               <CardDescription className="text-gray-400">
-                View and manage driver information
+                Shift duration is calculated from active shift start time.
               </CardDescription>
             </div>
             <div className="relative w-full sm:w-64">
@@ -440,8 +509,7 @@ export function DriversPage() {
                 <TableHeader>
                   <TableRow className="border-gray-800 hover:bg-transparent">
                     <TableHead className="text-gray-400">Driver</TableHead>
-                    <TableHead className="text-gray-400">Online</TableHead>
-                    <TableHead className="text-gray-400">Last Seen</TableHead>
+                    <TableHead className="text-gray-400">Shift Duration</TableHead>
                     <TableHead className="text-gray-400">Status</TableHead>
                     <TableHead className="text-gray-400">Break</TableHead>
                     <TableHead className="text-gray-400">Current Vehicle</TableHead>
@@ -453,7 +521,7 @@ export function DriversPage() {
                 <TableBody>
                   {sortedDrivers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                         No drivers found
                       </TableCell>
                     </TableRow>
@@ -463,6 +531,7 @@ export function DriversPage() {
                         const driverId = resolveDriverId(driver);
                         const status = driverId ? statusMap[driverId] : undefined;
                         const activeShift = driverId ? activeShiftMap[driverId] : undefined;
+                        const isOnBreak = activeShift ? Boolean(breakByShiftId[activeShift.id]) : false;
                         return (
                           <TableRow key={driver.driver_id ?? driverId} className="border-gray-800">
                             <TableCell className="font-medium text-white">
@@ -471,17 +540,8 @@ export function DriversPage() {
                                 <p className="text-xs text-gray-500">{driver.profile_email ?? driver.email}</p>
                               </div>
                             </TableCell>
-                            <TableCell>
-                              {isOnline(status) ? (
-                                <Badge className="bg-green-950 text-green-400 border-green-900">Online</Badge>
-                              ) : (
-                                <Badge className="bg-gray-900 text-gray-300 border-gray-700">Offline</Badge>
-                              )}
-                            </TableCell>
                             <TableCell className="text-gray-300">
-                              {status?.last_seen_at
-                                ? formatDistanceToNow(new Date(status.last_seen_at), { addSuffix: true })
-                                : 'Never'}
+                              {getShiftDurationLabel(activeShift)}
                             </TableCell>
                             <TableCell>
                               {status?.status_state ? (
@@ -493,7 +553,7 @@ export function DriversPage() {
                               )}
                             </TableCell>
                             <TableCell>
-                              {status?.on_break ? (
+                              {isOnBreak ? (
                                 <Badge className="bg-amber-950 text-amber-300 border-amber-800">On Break</Badge>
                               ) : (
                                 <Badge className="bg-gray-900 text-gray-300 border-gray-700">No</Badge>
