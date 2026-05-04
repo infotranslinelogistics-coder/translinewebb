@@ -1,5 +1,6 @@
 // Shifts management page
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
@@ -52,6 +53,9 @@ type ChecklistSummary = {
   pass: number;
   fail: number;
   pending: number;
+  submittedAt: string | null;
+  answerCount: number;
+  hasFailures: boolean | null;
 };
 
 type BreakSummary = {
@@ -152,11 +156,43 @@ const normalizeChecklist = (checklist: Shift['checklist'] | null | undefined): C
   return Object.entries(checklist).map(([key, value]) => getChecklistItem(key, value));
 };
 
+const CHECKLIST_EVENT_TYPES = ['checklist_submitted', 'checklist_completed', 'shift_checklist_submitted'];
+
+const getChecklistAnswersFromMetadata = (metadata: Record<string, unknown> | null | undefined): Record<string, unknown> | null => {
+  if (!metadata) return null;
+
+  const directAnswers = metadata.answers;
+  if (isRecord(directAnswers)) return directAnswers;
+
+  const directChecklist = metadata.checklist;
+  if (isRecord(directChecklist)) return directChecklist;
+
+  return null;
+};
+
+const getLatestChecklistEvent = (events: ShiftEvent[]): ShiftEvent | null => {
+  const checklistEvents = events.filter((event) => CHECKLIST_EVENT_TYPES.includes(event.event_type));
+  if (checklistEvents.length === 0) return null;
+
+  return checklistEvents.reduce<ShiftEvent | null>((latest, event) => {
+    if (!latest) return event;
+    return new Date(event.created_at).getTime() >= new Date(latest.created_at).getTime() ? event : latest;
+  }, null);
+};
+
 const getChecklistSummary = (items: ChecklistDisplayItem[] | null | undefined): ChecklistSummary => {
   const safeItems = Array.isArray(items) ? items : [];
 
   if (safeItems.length === 0) {
-    return { total: 0, pass: 0, fail: 0, pending: 0 };
+    return {
+      total: 0,
+      pass: 0,
+      fail: 0,
+      pending: 0,
+      submittedAt: null,
+      answerCount: 0,
+      hasFailures: null,
+    };
   }
 
   let pass = 0;
@@ -173,6 +209,9 @@ const getChecklistSummary = (items: ChecklistDisplayItem[] | null | undefined): 
     pass,
     fail,
     pending,
+    submittedAt: null,
+    answerCount: safeItems.length,
+    hasFailures: fail > 0,
   };
 };
 
@@ -314,6 +353,7 @@ const getBreakSummary = (events: ShiftEvent[]): BreakSummary => {
 };
 
 export function ShiftsPage() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
@@ -398,25 +438,44 @@ export function ShiftsPage() {
 
   const handleEndShift = async () => {
     if (!selectedShift) return;
+    const shiftId = selectedShift.id;
+
     try {
-      const { error } = await supabase.rpc('force_end_shift', {
-        p_shift_id: selectedShift.id,
-        p_reason: endShiftReason || 'Ended by admin',
+      const { data, error } = await supabase.rpc('force_end_shift', {
+        p_shift_id: shiftId,
+        p_reason: 'Force ended by admin',
       });
-      if (error) throw error;
-      setShifts(shifts.map((s) =>
-        s.id === selectedShift.id
-          ? { ...s, status: 'ended', ended_at: new Date().toISOString() }
-          : s
-      ));
-      setActiveCount(Math.max(0, activeCount - 1));
+      if (error) {
+        console.error('force_end_shift RPC error', {
+          shiftId,
+          params: {
+            p_shift_id: shiftId,
+            p_reason: 'Force ended by admin',
+          },
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+        throw error;
+      }
+
+      console.info('force_end_shift RPC success', {
+        shiftId,
+        result: data,
+      });
+
+      await fetchShifts();
       setEndShiftDialog(false);
       setSelectedShift(null);
       setEndShiftReason('');
       setError(null);
     } catch (err) {
       setError('Failed to end shift');
-      console.error(err);
+      console.error('handleEndShift failed', {
+        shiftId,
+        error: err,
+      });
     }
   };
 
@@ -458,8 +517,16 @@ export function ShiftsPage() {
     }
   };
 
-  const checklistItems = normalizeChecklist(detailShift?.checklist ?? null);
-  const checklistSummary = getChecklistSummary(checklistItems);
+  const latestChecklistEvent = getLatestChecklistEvent(shiftEvents);
+  const checklistItems = normalizeChecklist(
+    getChecklistAnswersFromMetadata(isRecord(latestChecklistEvent?.metadata) ? latestChecklistEvent.metadata : null) as Shift['checklist']
+  );
+  const checklistSummary = {
+    ...getChecklistSummary(checklistItems),
+    submittedAt: latestChecklistEvent?.created_at ?? null,
+    answerCount: checklistItems.length,
+    hasFailures: checklistItems.length > 0 ? checklistItems.some((item) => item.status === 'fail') : null,
+  };
   const timelineItems = detailShift ? buildTimeline(detailShift, shiftEvents) : [];
   const breakSummary = getBreakSummary(shiftEvents);
   const locationItems = shiftEvents
@@ -637,7 +704,7 @@ export function ShiftsPage() {
                                 size="sm"
                                 className="text-gray-400 hover:text-blue-400 h-8 px-2 text-xs"
                                 onClick={() => {
-                                  loadShiftDetails(shift);
+                                  navigate(`/shifts/${shift.id}`);
                                 }}
                               >
                                 View Details
@@ -801,35 +868,66 @@ export function ShiftsPage() {
               </CardHeader>
 
               <CardContent className="space-y-3 text-sm">
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-gray-300">Total: {checklistSummary.total}</div>
-                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-green-400">Passed: {checklistSummary.pass}</div>
-                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-red-400">Failed: {checklistSummary.fail}</div>
-                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-yellow-400">Pending: {checklistSummary.pending}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-gray-300">
+                    Submitted At: {checklistSummary.submittedAt ? formatTimestamp(checklistSummary.submittedAt) : 'Pending'}
+                  </div>
+                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-gray-300">
+                    Answers: {checklistSummary.answerCount > 0 ? checklistSummary.answerCount : 'Pending'}
+                  </div>
+                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-gray-300">
+                    Has Failures:{' '}
+                    <span
+                      className={
+                        checklistSummary.hasFailures == null
+                          ? 'text-yellow-400'
+                          : checklistSummary.hasFailures
+                            ? 'text-red-400'
+                            : 'text-green-400'
+                      }
+                    >
+                      {checklistSummary.hasFailures == null ? 'Pending' : checklistSummary.hasFailures ? 'Fail' : 'Pass'}
+                    </span>
+                  </div>
+                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-gray-300">
+                    Total Answers: {checklistSummary.total}
+                  </div>
                 </div>
 
                 <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
-                  {checklistItems.map((item) => (
-                    <div
-                      key={`detail-${detailShift.id}-${item.key}`}
-                      className="rounded-lg border border-gray-800 bg-[#121212] px-3 py-2 text-xs"
-                    >
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">{item.label}</span>
-                        <span
-                          className={
-                            item.status === "fail"
-                              ? "text-red-400"
-                              : item.status === "pass"
-                              ? "text-green-400"
-                              : "text-yellow-400"
-                          }
-                        >
-                          {item.statusLabel}
-                        </span>
-                      </div>
+                  {checklistItems.length === 0 ? (
+                    <div className="rounded-lg border border-gray-800 bg-[#121212] px-3 py-2 text-xs text-gray-500">
+                      No checklist submission event found
                     </div>
-                  ))}
+                  ) : (
+                    checklistItems.map((item) => (
+                      <div
+                        key={`detail-${detailShift.id}-${item.key}`}
+                        className="rounded-lg border border-gray-800 bg-[#121212] px-3 py-2 text-xs"
+                      >
+                        <div className="flex justify-between gap-3">
+                          <span className="text-gray-300">{item.label}</span>
+                          <span
+                            className={
+                              item.status === "fail"
+                                ? "text-red-400"
+                                : item.status === "pass"
+                                ? "text-green-400"
+                                : "text-yellow-400"
+                            }
+                          >
+                            {item.statusLabel}
+                          </span>
+                        </div>
+                        {item.valueLabel && (
+                          <p className="mt-1 text-[11px] text-gray-400">{item.valueLabel}</p>
+                        )}
+                        {item.notes && (
+                          <p className="mt-1 text-[11px] text-gray-500">{item.notes}</p>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -4,19 +4,19 @@ import { Outlet, Link, useLocation } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
-import { Input } from '@/app/components/ui/input';
+import { GlobalSearch } from '@/components/GlobalSearch';
 import {
   LayoutDashboard,
   Users,
   Truck,
   MapPin,
   Calendar,
+  Droplets,
   Wrench,
   FileText,
   Camera,
   Settings,
   LogOut,
-  Search,
   RefreshCw,
   Menu,
   X,
@@ -28,6 +28,7 @@ const navigation = [
   { name: 'Vehicles', href: '/vehicles', icon: Truck },
   { name: 'Live Map', href: '/live-map', icon: MapPin },
   { name: 'Odometer', href: '/odometer', icon: Camera },
+  { name: 'Fuel Logs', href: '/fuel-logs', icon: Droplets },
   { name: 'Shifts', href: '/shifts', icon: Calendar },
   { name: 'Maintenance', href: '/maintenance', icon: Wrench },
   { name: 'Logs', href: '/logs', icon: FileText },
@@ -176,13 +177,8 @@ export function DashboardLayout() {
                 <Menu className="w-5 h-5" />
               </Button>
 
-              <div className="relative hidden sm:block">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <Input
-                  type="search"
-                  placeholder="Search..."
-                  className="w-64 pl-10 bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
-                />
+              <div className="hidden sm:block">
+                <GlobalSearch />
               </div>
             </div>
 

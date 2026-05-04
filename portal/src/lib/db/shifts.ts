@@ -34,6 +34,7 @@ export interface ShiftFull {
   id: string;
   driver_id: string | null;
   vehicle_id: string | null;
+  checklist?: Record<string, ShiftChecklistValue> | null;
   status: string | null;
   started_at: string | null;
   ended_at: string | null;
@@ -292,18 +293,32 @@ export async function fetchShiftWithEvents(shiftId: string): Promise<{
   shift: ShiftFull | null;
   events: ShiftEvent[];
 }> {
-  const [shiftsData, events] = await Promise.all([
+  const [shiftsData, rawShiftData, events] = await Promise.all([
     supabase
       .from('shifts_full')
       .select('id, driver_id, vehicle_id, status, started_at, ended_at, start_lat, start_lng, end_lat, end_lng, created_at, driver_name, vehicle_rego')
+      .eq('id', shiftId)
+      .maybeSingle(),
+    supabase
+      .from('shifts')
+      .select('checklist')
       .eq('id', shiftId)
       .maybeSingle(),
     fetchShiftEvents(shiftId),
   ]);
 
   if (shiftsData.error) throw shiftsData.error;
+  if (rawShiftData.error) throw rawShiftData.error;
+
+  const mergedShift = shiftsData.data
+    ? {
+        ...(shiftsData.data as ShiftFull),
+        checklist: (rawShiftData.data as { checklist?: Record<string, ShiftChecklistValue> | null } | null)?.checklist ?? null,
+      }
+    : null;
+
   return {
-    shift: (shiftsData.data as ShiftFull | null) ?? null,
+    shift: mergedShift,
     events,
   };
 }

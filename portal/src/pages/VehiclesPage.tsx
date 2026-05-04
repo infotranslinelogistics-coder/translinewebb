@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
@@ -31,11 +32,12 @@ interface Vehicle {
 }
 
 interface Driver {
-  driver_id: string;
+  id: string;
   full_name: string;
 }
 
 export function VehiclesPage() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,8 +108,8 @@ export function VehiclesPage() {
 
   async function fetchDrivers() {
     const { data, error } = await supabase
-      .from('drivers_with_current_vehicle')
-      .select('driver_id, full_name')
+      .from('drivers')
+      .select('id, full_name')
       .order('full_name');
 
     if (error) {
@@ -372,6 +374,14 @@ export function VehiclesPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
+                                className="text-blue-400 hover:text-blue-300 h-8 px-2 text-xs"
+                                onClick={() => navigate(`/vehicles/${vehicle.id}`)}
+                              >
+                                Details
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                 className="text-gray-400 hover:text-blue-400 h-8 w-8 p-0"
                                 onClick={() => {
                                   openAssignModal(vehicle);
@@ -461,7 +471,7 @@ export function VehiclesPage() {
               >
                 <option value="">Unassigned</option>
                 {drivers.map((driver) => (
-                  <option key={driver.driver_id} value={String(driver.driver_id)}>
+                  <option key={driver.id} value={String(driver.id)}>
                     {driver.full_name}
                   </option>
                 ))}

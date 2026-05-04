@@ -159,10 +159,9 @@ const clearRoute = () => {
         const fmt = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         // ── events (break + stops) ──────────────────────────────────────────────
-        const events = await fetchShiftEvents(shift.id);
-        const sorted = [...events].sort((a, b) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        );
+        const forceEndEvent = [...sorted].reverse().find((event) => event.event_type === 'force_end_shift');
+        const endEventLabel = forceEndEvent ? 'Force ended' : 'Shift End';
+        const endEventAt = forceEndEvent?.created_at ?? shift.ended_at;
 
         // break status
         let breakRows: { label: string; value: string }[] = [];
@@ -196,7 +195,7 @@ const clearRoute = () => {
         polyline.bindPopup(shiftPopupHtml, { maxWidth: 280, closeButton: false });
         polyline.on('click', function (this: L.Polyline) { this.openPopup(); });
 
-        const snappedStart = snapToRoute(coords, Number(shift.start_lat), Number(shift.start_lng));
+        const snappedStart = snapToRoute(coords, Number(startLocation.latitude), Number(startLocation.longitude));
         addLayer(
           L.marker(snappedStart, {
             icon: L.divIcon({ className: '', html: dotHtml('#22c55e', 16, true), iconSize: [16, 16], iconAnchor: [8, 8] }),
@@ -208,14 +207,14 @@ const clearRoute = () => {
           ], 'Start Point'), { closeButton: false })
         );
 
-        if (shift.end_lat != null && shift.end_lng != null) {
-          const snappedEnd = snapToRoute(coords, Number(shift.end_lat), Number(shift.end_lng));
+        if (endLocation.latitude != null && endLocation.longitude != null) {
+          const snappedEnd = snapToRoute(coords, Number(endLocation.latitude), Number(endLocation.longitude));
           addLayer(
             L.marker(snappedEnd, {
               icon: L.divIcon({ className: '', html: dotHtml('#ef4444', 16, true), iconSize: [16, 16], iconAnchor: [8, 8] }),
             }).bindPopup(popupCard([
-              { label: 'Event',    value: 'Shift End' },
-              { label: 'Time',     value: endedAt ? fmt(endedAt) : '-' },
+              { label: 'Event',    value: endEventLabel },
+              { label: 'Time',     value: endEventAt ? fmt(new Date(endEventAt)) : '-' },
               { label: 'Duration', value: durationText },
               { label: 'Distance', value: formatDistance(totalDistance) },
             ], 'End Point'), { closeButton: false })
@@ -347,20 +346,8 @@ const clearRoute = () => {
   }, [drivers, locations, onlineOnly, vehicleFilter]);
 
   const previousShiftOptions = useMemo(() => {
-    console.log(vehicleFilter, previousShifts);
-    return previousShifts.filter((shift) =>
-      Boolean(
-        shift.id &&
-        shift.started_at &&
-        shift.start_lat != null &&
-        shift.start_lng != null &&
-        shift.end_lat != null &&
-        shift.end_lng != null &&
-        (shift.vehicle_rego == vehicleFilter || vehicleFilter === 'all') &&
-      (onlineOnly ? gpsDrivers.find(d => d.driver_id === shift.driver_id)?.online_status === 'online' : true)
-      )
-    );
-  }, [previousShifts, vehicleFilter, onlineOnly]);
+    return previousShifts.filter((shift) => Boolean(shift.id && shift.ended_at));
+  }, [previousShifts]);
 
   const formatPreviousShiftLabel = useCallback((shift: ShiftFull) => {
     const dateLabel = shift.started_at
@@ -390,25 +377,79 @@ const clearRoute = () => {
 
     mapInstanceRef.current = map;
 
+    let cancelled = false;
+
     const init = async () => {
       try {
         const driverRows = await listDrivers();
+        if (cancelled) return;
         setDrivers(driverRows);
         getAllVehicles();
+        
+        // Fetch all shifts to find active and ended ones
         const shifts = await fetchShiftsFull();
-        setPreviousShifts(
-          shifts.filter((shift) =>
-            shift.status !== 'active' && shift.ended_at != null
-          )
+        if (cancelled) return;
+        const endedShifts = shifts.filter((shift) => shift.ended_at != null);
+
+        // Early return if no ended shifts
+        if (endedShifts.length === 0) {
+          setPreviousShifts([]);
+          setActiveShifts(shifts.filter((shift) => shift.status === 'active'));
+          return;
+        }
+        
+        // Fetch ALL location events (with pagination to avoid 1000 row limit)
+        let allLocationEvents: any[] = [];
+        let hasMore = true;
+        let offset = 0;
+        const pageSize = 1000;
+        
+        while (hasMore) {
+          const { data, error } = await supabase
+            .from('shift_events')
+            .select('shift_id')
+            .eq('event_type', 'location')
+            .not('latitude', 'is', null)
+            .not('longitude', 'is', null)
+            .order('created_at', { ascending: false })
+            .range(offset, offset + pageSize - 1);
+          
+          if (error) {
+            console.error('Failed to load location events:', error);
+            break;
+          }
+          
+          if (!data || data.length === 0) {
+            hasMore = false;
+          } else {
+            allLocationEvents = allLocationEvents.concat(data);
+            if (data.length < pageSize) {
+              hasMore = false;
+            }
+            offset += pageSize;
+          }
+        }
+        if (cancelled) return;
+        
+        // Track which shift IDs have location events
+        const shiftIdsWithLocation = new Set(
+          allLocationEvents.map((event) => event.shift_id)
         );
+        
+        // Filter ended shifts to only those with location events
+        const shiftsWithGps = endedShifts.filter(shift => shiftIdsWithLocation.has(shift.id));
+        setPreviousShifts(shiftsWithGps);
+        
         setActiveShifts(
           shifts.filter((shift) => shift.status === 'active')
-        )
+        );
 
         const rows = await listLatestLocationsByDrivers();
+        if (cancelled) return;
         const locMap = new Map();
 
         rows.forEach((loc) => {
+          if (cancelled || mapInstanceRef.current !== map) return;
           locMap.set(loc.driver_id, loc);
 
           const marker = L.marker(
@@ -450,8 +491,10 @@ const clearRoute = () => {
     });
 
     return () => {
+      cancelled = true;
       map.remove();
       mapInstanceRef.current = null;
+      markersRef.current.clear();
       supabase.removeChannel(channel);
       routeLayerRef.current = null;
     };
@@ -645,8 +688,6 @@ const clearRoute = () => {
                   </Select>
                   {previousShifts.find(s => s.id === selectedHistoryShiftId) && 
                   (previousShifts.find(s => s.id === selectedHistoryShiftId)?.vehicle_rego === vehicleFilter || vehicleFilter === 'all') && 
-                  (gpsDrivers.find(d=>d.driver_id === previousShifts.find(s => s.id === selectedHistoryShiftId)?.driver_id))
-                  &&
                   (
                     <button
                       type="button"
