@@ -9,9 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/app/components/ui/alert-dialog';
 import { Search, Clock, Loader } from 'lucide-react';
-import { format } from 'date-fns';
 import { listShifts, Shift, countActiveShifts, countTodayShifts } from '@/lib/db/shifts';
 import { supabase } from '@/lib/supabase';
+import { formatPerthDateTime, PERTH_TIME_LABEL } from '@/lib/dateTime';
 
 const formatChecklistLabel = (key: string) =>
   key
@@ -73,9 +73,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const formatTimestamp = (value?: string | null) => {
   if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return format(date, 'MMM dd, yyyy HH:mm:ss');
+  return formatPerthDateTime(value);
 };
 
 const formatDurationSeconds = (seconds: number) => {
@@ -364,6 +362,8 @@ export function ShiftsPage() {
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
   const [endShiftDialog, setEndShiftDialog] = useState(false);
   const [endShiftReason, setEndShiftReason] = useState('');
+  const [deleteShiftTarget, setDeleteShiftTarget] = useState<Shift | null>(null);
+  const [deletingShiftId, setDeletingShiftId] = useState<string | null>(null);
   const [detailShift, setDetailShift] = useState<Shift | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -484,6 +484,39 @@ export function ShiftsPage() {
     if (!open) setEndShiftReason('');
   };
 
+  const handleDeleteShift = async () => {
+    if (!deleteShiftTarget) return;
+
+    const shiftId = deleteShiftTarget.id;
+    setDeletingShiftId(shiftId);
+
+    try {
+      const { error: deleteError } = await supabase.rpc('delete_shift_admin', {
+        p_shift_id: shiftId,
+      });
+
+      if (deleteError) {
+        console.error('delete_shift_admin RPC error', {
+          shiftId,
+          code: deleteError.code,
+          message: deleteError.message,
+          details: deleteError.details,
+          hint: deleteError.hint,
+        });
+        throw deleteError;
+      }
+
+      await fetchShifts();
+      setDeleteShiftTarget(null);
+      setError(null);
+    } catch (err) {
+      console.error('handleDeleteShift failed', { shiftId, error: err });
+      setError('Failed to delete shift');
+    } finally {
+      setDeletingShiftId(null);
+    }
+  };
+
   const loadShiftDetails = useCallback(async (shift: Shift) => {
     try {
       setDetailsLoading(true);
@@ -544,7 +577,7 @@ export function ShiftsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Shifts</h1>
-          <p className="text-gray-400">Track driver shifts and checklists</p>
+          <p className="text-gray-400">Track driver shifts and checklists. All times shown in {PERTH_TIME_LABEL}.</p>
         </div>
       </div>
 
@@ -649,14 +682,12 @@ export function ShiftsPage() {
                           <TableCell className="text-gray-300">
                             <div className="flex items-center gap-2">
                               <Clock className="w-4 h-4 text-gray-500" />
-                              {shift.started_at
-                                ? format(new Date(shift.started_at), 'MMM dd, HH:mm')
-                                : '—'}
+                              {formatPerthDateTime(shift.started_at)}
                             </div>
                           </TableCell>
                           <TableCell className="text-gray-300">
                             {shift.ended_at
-                              ? format(new Date(shift.ended_at), 'MMM dd, HH:mm')
+                              ? formatPerthDateTime(shift.ended_at)
                               : <span className="text-yellow-400">In progress</span>}
                           </TableCell>
                           <TableCell>
@@ -709,6 +740,15 @@ export function ShiftsPage() {
                               >
                                 View Details
                               </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-gray-400 hover:text-red-400 h-8 px-2 text-xs"
+                                disabled={deletingShiftId === shift.id}
+                                onClick={() => setDeleteShiftTarget(shift)}
+                              >
+                                {deletingShiftId === shift.id ? 'Deleting...' : 'Delete Shift'}
+                              </Button>
                               {shift.status === 'active' && (
                                 <Button
                                   variant="ghost"
@@ -760,6 +800,29 @@ export function ShiftsPage() {
               className="bg-red-600 text-white hover:bg-red-700"
             >
               End Shift
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={Boolean(deleteShiftTarget)} onOpenChange={(open) => !open && setDeleteShiftTarget(null)}>
+        <AlertDialogContent className="bg-[#161616] border-gray-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Delete Shift</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              This deletes the shift and all related events. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex gap-4">
+            <AlertDialogCancel className="bg-gray-800 text-gray-300 hover:bg-gray-700" disabled={Boolean(deletingShiftId)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteShift}
+              className="bg-red-600 text-white hover:bg-red-700"
+              disabled={Boolean(deletingShiftId)}
+            >
+              {deletingShiftId ? 'Deleting...' : 'Delete Shift'}
             </AlertDialogAction>
           </div>
         </AlertDialogContent>

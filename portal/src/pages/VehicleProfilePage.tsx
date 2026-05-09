@@ -4,7 +4,7 @@ import {
   ArrowLeft, Loader, Truck, MapPin, Navigation, Clock, Activity, TrendingUp, Wrench, Gauge,
 } from 'lucide-react';
 import {
-  format, formatDistanceToNowStrict, differenceInMinutes, startOfWeek, endOfWeek,
+  formatDistanceToNowStrict, differenceInMinutes, startOfWeek, endOfWeek,
 } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/ta
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
 import { supabase } from '@/lib/supabase';
 import { listLatestLocationsByDrivers } from '@/lib/db/locations';
+import { formatPerthDateTime } from '@/lib/dateTime';
 
 /* ─── types ─── */
 interface VehicleRow {
@@ -50,8 +51,7 @@ interface DriverLocationRow {
 const PAGE_SIZE = 10;
 
 function fmtDate(d: string | null | undefined) {
-  if (!d) return '—';
-  return format(new Date(d), 'MMM dd, yyyy HH:mm');
+  return formatPerthDateTime(d);
 }
 function statusBadge(s: string | null | undefined) {
   if (s === 'active') return 'bg-blue-950 text-blue-300 border-blue-800';

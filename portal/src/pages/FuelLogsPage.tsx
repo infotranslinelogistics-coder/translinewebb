@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { endOfWeek, format, startOfWeek } from 'date-fns';
+import { endOfWeek, startOfWeek } from 'date-fns';
 import { useNavigate } from 'react-router';
 import { Droplets, ExternalLink, Image as ImageIcon, Loader, MapPin, Receipt } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/app/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -14,7 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { listDrivers } from '@/lib/db/drivers';
 import { listVehicles, type Vehicle } from '@/lib/db/vehicles';
 import { supabase } from '@/lib/supabase';
-import { getSignedStorageUrl } from '@/lib/storage/privateFiles';
+import { formatPerthDateTime, PERTH_TIME_LABEL } from '@/lib/dateTime';
 
 interface FuelMetadata {
   litres: number | null;
@@ -75,9 +76,7 @@ function toText(value: unknown): string | null {
 
 function formatDateTime(value?: string | null) {
   if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return format(date, 'MMM dd, yyyy HH:mm');
+  return formatPerthDateTime(value);
 }
 
 function formatCurrency(value: number | null) {
@@ -92,17 +91,30 @@ function formatOdometer(value: number | null) {
   return value != null ? `Odometer: ${Math.round(value).toLocaleString()} km` : '—';
 }
 
+function isLegacyLocalUri(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return normalized.startsWith('data:') || normalized.startsWith('file:') || normalized.startsWith('blob:');
+}
+
+function asStoragePath(value: unknown): string | null {
+  const text = toText(value);
+  if (!text) return null;
+  if (isLegacyLocalUri(text)) return null;
+  return text;
+}
+
 function getReceiptPath(metadata: Record<string, unknown>): string | null {
-  const newPath = toText(metadata.receipt_photo_path);
+  const newPath = asStoragePath(metadata.receipt_photo_path);
   if (newPath) return newPath;
 
   const legacy = metadata.receipt_urls;
   if (Array.isArray(legacy) && legacy.length > 0) {
-    return toText(legacy[0]);
+    const validPath = legacy.map((entry) => asStoragePath(entry)).find((entry): entry is string => Boolean(entry));
+    return validPath ?? null;
   }
 
   if (typeof legacy === 'string') {
-    return toText(legacy);
+    return asStoragePath(legacy);
   }
 
   return null;
@@ -159,6 +171,8 @@ export function FuelLogsPage() {
   const [endDate, setEndDate] = useState('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [reviewingIds, setReviewingIds] = useState<string[]>([]);
+  const [deleteFuelLogId, setDeleteFuelLogId] = useState<string | null>(null);
+  const [deletingFuelLogId, setDeletingFuelLogId] = useState<string | null>(null);
 
   const driverMap = useMemo(() => {
     const map = new Map<string, DriverOption>();
@@ -222,15 +236,33 @@ export function FuelLogsPage() {
   };
 
   const resolveReceipt = async (row: FuelLogRow) => {
-    const receiptPath = getReceiptPath(row.metadata ?? {});
-    const { url, error } = await getSignedStorageUrl({
-      filePath: receiptPath,
-      bucket: 'fuel_receipts',
+    const metadata = row.metadata ?? {};
+    const receiptPath = getReceiptPath(metadata);
+
+    console.log('[FuelLogs receipt]', {
+      id: row.id,
+      receipt_photo_path: metadata?.receipt_photo_path,
+      receipt_urls: metadata?.receipt_urls,
+      chosenPath: receiptPath,
     });
+
+    if (!receiptPath) {
+      return {
+        ...row,
+        receipt_url: null,
+        receipt_error: null,
+      };
+    }
+
+    const { data, error } = await supabase
+      .storage
+      .from('fuel_receipts')
+      .createSignedUrl(receiptPath, 3600);
+
     return {
       ...row,
-      receipt_url: url,
-      receipt_error: error,
+      receipt_url: data?.signedUrl ?? null,
+      receipt_error: error?.message ?? null,
     };
   };
 
@@ -363,6 +395,43 @@ export function FuelLogsPage() {
     fetchFuelLogs();
   }, [driverFilter, vehicleFilter, startDate, endDate, page, shifts]);
 
+  const handleDeleteFuelLog = async () => {
+    if (!deleteFuelLogId) return;
+
+    const eventId = deleteFuelLogId;
+    setDeletingFuelLogId(eventId);
+
+    try {
+      const { error: deleteError } = await supabase.rpc('delete_fuel_log_admin', {
+        p_event_id: eventId,
+      });
+
+      if (deleteError) {
+        console.error('delete_fuel_log_admin RPC error', {
+          eventId,
+          code: deleteError.code,
+          message: deleteError.message,
+          details: deleteError.details,
+          hint: deleteError.hint,
+        });
+        throw deleteError;
+      }
+
+      await fetchFuelLogs();
+      setDeleteFuelLogId(null);
+      setError(null);
+    } catch (err) {
+      console.error('handleDeleteFuelLog failed', {
+        eventId,
+        error: err,
+      });
+      setError('Failed to delete fuel log');
+      setDeleteFuelLogId(null);
+    } finally {
+      setDeletingFuelLogId(null);
+    }
+  };
+
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
@@ -420,7 +489,7 @@ export function FuelLogsPage() {
       <Card className="bg-[#161616] border-gray-800">
         <CardHeader>
           <CardTitle className="text-white">Filters</CardTitle>
-          <CardDescription className="text-gray-400">Refine fuel logs by driver, vehicle, and date range</CardDescription>
+          <CardDescription className="text-gray-400">Refine fuel logs by driver, vehicle, and date range. All times shown in {PERTH_TIME_LABEL}.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="space-y-2">
@@ -509,12 +578,13 @@ export function FuelLogsPage() {
                     <TableHead className="text-gray-400">Location</TableHead>
                     <TableHead className="text-gray-400">Receipt</TableHead>
                     <TableHead className="text-gray-400">Seen</TableHead>
+                    <TableHead className="text-gray-400">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {logs.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center py-8 text-gray-500">No fuel logs found.</TableCell>
+                      <TableCell colSpan={12} className="text-center py-8 text-gray-500">No fuel logs found.</TableCell>
                     </TableRow>
                   ) : logs.map((row) => {
                     const metadata = parseFuelMetadata(row);
@@ -595,8 +665,6 @@ export function FuelLogsPage() {
                                 Open
                               </a>
                             </div>
-                          ) : metadata.receiptPhotoPath ? (
-                            <span className="text-xs text-gray-500">{row.receipt_error ?? 'Receipt unavailable'}</span>
                           ) : '—'}
                         </TableCell>
                         <TableCell className="text-gray-300">
@@ -606,14 +674,24 @@ export function FuelLogsPage() {
                             </Badge>
                             <Button
                               size="sm"
-                              variant={reviewed ? 'outline' : 'default'}
-                              className={reviewed ? 'border-gray-700 text-gray-300 hover:text-white text-xs' : 'bg-[#FF6B35] text-white hover:bg-[#e55a25] text-xs'}
+                              className="bg-[#FF6B35] text-white hover:bg-[#e55a25] text-xs"
                               disabled={reviewing}
                               onClick={() => handleToggleReviewed(row)}
                             >
                               {reviewing ? 'Saving...' : reviewed ? 'Mark Unseen' : 'Mark Seen'}
                             </Button>
                           </div>
+                        </TableCell>
+                        <TableCell className="text-gray-300">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="bg-red-700 text-white hover:bg-red-600 text-xs"
+                            disabled={deletingFuelLogId === row.id}
+                            onClick={() => setDeleteFuelLogId(row.id)}
+                          >
+                            {deletingFuelLogId === row.id ? 'Deleting...' : 'Delete Fuel Log'}
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );
@@ -650,7 +728,7 @@ export function FuelLogsPage() {
       </Card>
 
       <Dialog open={Boolean(previewUrl)} onOpenChange={(open) => !open && setPreviewUrl(null)}>
-        <DialogContent className="bg-[#161616] border-gray-800 max-w-3xl">
+        <DialogContent className="bg-[#161616] border-gray-800 max-w-3xl [&>button]:text-[#FF6B35] [&>button:hover]:text-[#e55a25]">
           <DialogHeader>
             <DialogTitle className="text-white">Fuel Receipt</DialogTitle>
           </DialogHeader>
@@ -659,6 +737,29 @@ export function FuelLogsPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={Boolean(deleteFuelLogId)} onOpenChange={(open) => !open && setDeleteFuelLogId(null)}>
+        <AlertDialogContent className="bg-[#161616] border-gray-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Delete Fuel Log</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              This will delete the selected fuel log event. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex gap-4">
+            <AlertDialogCancel className="bg-gray-800 text-gray-300 hover:bg-gray-700" disabled={Boolean(deletingFuelLogId)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteFuelLog}
+              className="bg-red-600 text-white hover:bg-red-700"
+              disabled={Boolean(deletingFuelLogId)}
+            >
+              {deletingFuelLogId ? 'Deleting...' : 'Delete Fuel Log'}
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

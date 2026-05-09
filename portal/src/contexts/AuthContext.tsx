@@ -75,6 +75,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error };
       }
 
+      // Portal is admin-only: block accounts linked to a driver record.
+      if (data.user?.id) {
+        const { data: driverRow, error: driverLookupError } = await supabase
+          .from('drivers')
+          .select('id')
+          .eq('user_id', data.user.id)
+          .maybeSingle();
+
+        if (driverLookupError) {
+          console.error('Failed to verify portal access role:', driverLookupError);
+          await supabase.auth.signOut({ scope: 'local' });
+          return {
+            error: new Error('Unable to verify portal access right now. Please try again.'),
+          };
+        }
+
+        if (driverRow) {
+          await supabase.auth.signOut({ scope: 'local' });
+          return {
+            error: new Error('Drivers cannot log in to the admin portal.'),
+          };
+        }
+      }
+
       // Session is automatically set by onAuthStateChange listener
       return { error: null, user: data.user || undefined };
     } catch (error) {
@@ -84,13 +108,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      if (error) {
+        throw error;
+      }
+    } catch (error) {
+      console.error('Failed to sign out:', error);
+    } finally {
+      // Always clear local auth state so the UI reliably returns to login.
       setUser(null);
       setSession(null);
       localStorage.removeItem('supabase.session');
-    } catch (error) {
-      console.error('Failed to sign out:', error);
-      throw error;
     }
   };
 
@@ -109,7 +137,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    console.error('useAuth called outside AuthProvider; falling back to unauthenticated state.');
+    return {
+      user: null,
+      session: null,
+      loading: false,
+      signIn: async () => ({ error: new Error('Auth is not initialized.') }),
+      signOut: async () => {},
+      isAuthenticated: false,
+    };
   }
   return context;
 }

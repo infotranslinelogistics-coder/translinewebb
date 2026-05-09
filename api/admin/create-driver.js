@@ -4,6 +4,14 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const anonKey = process.env.SUPABASE_ANON_KEY;
 
+function getMissingEnvVars() {
+  const missing = [];
+  if (!supabaseUrl) missing.push('SUPABASE_URL');
+  if (!serviceRole) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+  if (!anonKey) missing.push('SUPABASE_ANON_KEY');
+  return missing;
+}
+
 export default async function handler(req, res) {
 
   if (req.method !== "POST") {
@@ -11,6 +19,11 @@ export default async function handler(req, res) {
   }
 
   try {
+    const missingEnvVars = getMissingEnvVars();
+    if (missingEnvVars.length > 0) {
+      console.error('api/create-driver: missing required env vars:', missingEnvVars.join(', '));
+      return res.status(500).json({ error: `Missing ${missingEnvVars.join(', ')}` });
+    }
 
     const token = req.headers.authorization?.replace("Bearer ", "");
 
@@ -55,24 +68,24 @@ export default async function handler(req, res) {
     /* get body                           */
     /* ---------------------------------- */
 
-    const { email, full_name, name } = req.body;
+    const { email, password, full_name, name } = req.body;
+    const providedName =
+      (typeof full_name === 'string' && full_name.trim() !== '')
+        ? full_name.trim()
+        : (typeof name === 'string' && name.trim() !== '')
+          ? name.trim()
+          : null;
 
-    if (!email) {
-      return res.status(400).json({ error: "Email required" });
+    if (!email || !password || !providedName) {
+      return res.status(400).json({ error: 'email, password, and name are required' });
     }
-
-    const safeName =
-      (full_name && full_name.trim() !== "")
-        ? full_name
-        : (name && name.trim() !== "")
-          ? name
-          : email.split("@")[0];
 
     /* ---------------------------------- */
     /* find existing auth user            */
     /* ---------------------------------- */
 
     let authUserId;
+    let createdAuthUserInThisRequest = false;
 
     const { data: existingUsers } =
       await supabaseAdmin.auth.admin.listUsers();
@@ -82,14 +95,14 @@ export default async function handler(req, res) {
     );
 
     if (existing) {
-
       authUserId = existing.id;
-
     } else {
 
       const { data: newUser, error: createError } =
         await supabaseAdmin.auth.admin.createUser({
           email,
+          password,
+          user_metadata: { full_name: providedName, status: 'active' },
           email_confirm: true
         });
 
@@ -98,6 +111,7 @@ export default async function handler(req, res) {
       }
 
       authUserId = newUser.user.id;
+      createdAuthUserInThisRequest = true;
     }
 
     /* ---------------------------------- */
@@ -108,11 +122,14 @@ export default async function handler(req, res) {
       .from("profiles")
       .upsert({
         id: authUserId,
-        full_name: safeName,
+        full_name: providedName,
         role: "driver"
       });
 
     if (profileError) {
+      if (createdAuthUserInThisRequest) {
+        await supabaseAdmin.auth.admin.deleteUser(authUserId);
+      }
       return res.status(500).json({ error: profileError.message });
     }
 
@@ -124,10 +141,16 @@ export default async function handler(req, res) {
       .from("drivers")
       .upsert({
         user_id: authUserId,
+        full_name: providedName,
         status: "active"
+      }, {
+        onConflict: 'user_id'
       });
 
     if (driverError) {
+      if (createdAuthUserInThisRequest) {
+        await supabaseAdmin.auth.admin.deleteUser(authUserId);
+      }
       return res.status(500).json({ error: driverError.message });
     }
 
@@ -140,7 +163,12 @@ export default async function handler(req, res) {
       .insert({
         admin_id: userId,
         action: "create_driver",
-        target_user: authUserId
+        target_user: authUserId,
+        metadata: {
+          created_auth_user: createdAuthUserInThisRequest,
+          full_name: providedName,
+          email,
+        },
       });
 
     return res.status(200).json({

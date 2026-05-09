@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app
 import { Button } from '@/app/components/ui/button';
 import { Label } from '@/app/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
-import { MapPin, Loader, Search, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MapPin, Loader, RefreshCw } from 'lucide-react';
 import { Driver, listDrivers } from '@/lib/db/drivers';
 import { supabase } from '@/lib/supabase';
 import L from 'leaflet';
@@ -14,15 +14,25 @@ import { fetchShiftsFull } from '@/lib/db/shifts';
 import { Badge } from '@/app/components/ui/badge';
 import type { ShiftFull } from '@/lib/db/shifts';
 import { listVehicles } from '@/lib/db/vehicles';
+import { formatPerthDateTime, PERTH_TIME_LABEL } from '@/lib/dateTime';
 
 export function LiveMapPage() {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const routeMarkerRefs = useRef<{
+    start: L.Marker | null;
+    latest: L.Marker | null;
+    lastStop: L.Marker | null;
+  }>({
+    start: null,
+    latest: null,
+    lastStop: null,
+  });
+  const stopMarkersRef = useRef<L.Marker[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicleOptions, setVehicleOptions] = useState<string[]>([]);
   const [locations, setLocations] = useState<Map<string, any>>(new Map());
-  const [onlineOnly, setOnlineOnly] = useState(false);
   const [vehicleFilter, setVehicleFilter] = useState<string>('all');
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [selectedHistoryShiftId, setSelectedHistoryShiftId] = useState<string>('all');
@@ -44,7 +54,45 @@ const clearRoute = () => {
 
   extraLayersRef.current.forEach(l => map.removeLayer(l));
   extraLayersRef.current = [];
+
+  routeMarkerRefs.current = { start: null, latest: null, lastStop: null };
+  stopMarkersRef.current = [];
+  setStartPoint(null);
+  setLatestPoint(null);
+  setLastStopPoint(null);
+  setLastStopRecorded(false);
+  setStopPoints([]);
+  setActiveStopIndex(0);
 };
+
+  const flyToQuickPoint = useCallback((point: [number, number] | null, marker: L.Marker | null) => {
+    const map = mapInstanceRef.current;
+    if (!map || !point) return;
+    map.flyTo(point, 16);
+    marker?.openPopup();
+  }, []);
+
+  const jumpToStopIndex = useCallback((index: number) => {
+    const map = mapInstanceRef.current;
+    const totalStops = stopPoints.length;
+    if (!map || totalStops === 0) return;
+
+    const normalized = ((index % totalStops) + totalStops) % totalStops;
+    const point = stopPoints[normalized];
+    const marker = stopMarkersRef.current[normalized] ?? null;
+
+    setActiveStopIndex(normalized);
+    map.flyTo(point, 16);
+    marker?.openPopup();
+  }, [stopPoints]);
+
+  const goToPreviousStop = useCallback(() => {
+    jumpToStopIndex(activeStopIndex - 1);
+  }, [activeStopIndex, jumpToStopIndex]);
+
+  const goToNextStop = useCallback(() => {
+    jumpToStopIndex(activeStopIndex + 1);
+  }, [activeStopIndex, jumpToStopIndex]);
 
   function snapToRoute(
     coords: [number, number][],
@@ -156,7 +204,7 @@ const clearRoute = () => {
         const durationMs = startedAt && endedAt ? endedAt.getTime() - startedAt.getTime() : 0;
         const totalSec = Math.max(0, Math.floor(durationMs / 1000));
         const durationText = `${Math.floor(totalSec / 3600)}h ${Math.floor((totalSec % 3600) / 60)}m`;
-        const fmt = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const fmt = (d: Date) => formatPerthDateTime(d);
 
         // ── events (break + stops) ──────────────────────────────────────────────
         const forceEndEvent = [...sorted].reverse().find((event) => event.event_type === 'force_end_shift');
@@ -196,77 +244,80 @@ const clearRoute = () => {
         polyline.on('click', function (this: L.Polyline) { this.openPopup(); });
 
         const snappedStart = snapToRoute(coords, Number(startLocation.latitude), Number(startLocation.longitude));
-        addLayer(
-          L.marker(snappedStart, {
+        const startMarker = L.marker(snappedStart, {
             icon: L.divIcon({ className: '', html: dotHtml('#22c55e', 16, true), iconSize: [16, 16], iconAnchor: [8, 8] }),
           }).bindPopup(popupCard([
             { label: 'Event',   value: 'Shift Start' },
             { label: 'Time',    value: startedAt ? fmt(startedAt) : '-' },
             { label: 'Driver',  value: shift.driver_name ?? '-' },
             { label: 'Vehicle', value: shift.vehicle_rego ?? '-' },
-          ], 'Start Point'), { closeButton: false })
-        );
+          ], 'Start Point'), { closeButton: false });
+        addLayer(startMarker);
+        routeMarkerRefs.current.start = startMarker;
+        setStartPoint(snappedStart);
 
         if (endLocation.latitude != null && endLocation.longitude != null) {
           const snappedEnd = snapToRoute(coords, Number(endLocation.latitude), Number(endLocation.longitude));
-          addLayer(
-            L.marker(snappedEnd, {
+          const latestMarker = L.marker(snappedEnd, {
               icon: L.divIcon({ className: '', html: dotHtml('#ef4444', 16, true), iconSize: [16, 16], iconAnchor: [8, 8] }),
             }).bindPopup(popupCard([
-              { label: 'Event',    value: endEventLabel },
+              { label: 'Event',    value: shiftIsActive ? 'Current Location' : 'Latest Location' },
               { label: 'Time',     value: endEventAt ? fmt(new Date(endEventAt)) : '-' },
               { label: 'Duration', value: durationText },
               { label: 'Distance', value: formatDistance(totalDistance) },
-            ], 'End Point'), { closeButton: false })
-          );
+            ], shiftIsActive ? 'Current Point' : 'Latest Point'), { closeButton: false });
+          addLayer(latestMarker);
+          routeMarkerRefs.current.latest = latestMarker;
+          setLatestPoint(snappedEnd);
+          setLatestLabel(shiftIsActive ? 'Current' : 'Latest');
+        } else {
+          routeMarkerRefs.current.latest = null;
+          setLatestPoint(null);
         }
 
-        const MIN_STOP_MS = 3 * 60 * 1000;
-        const MIN_R = 50, MAX_R = 100;
-
-        events
+        const stopEventsDesc = events
           .filter(e =>
             e.event_type === 'stop_detected' &&
-            e.latitude != null && e.longitude != null && e.metadata
+            e.latitude != null && e.longitude != null
           )
-          .forEach(stop => {
-            const meta = stop.metadata as any;
-            const startTime = meta?.start_time ? new Date(meta.start_time) : null;
-            const endTime   = meta?.end_time   ? new Date(meta.end_time)   : null;
-            if (!startTime || !endTime) return;
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-            const durMs = endTime.getTime() - startTime.getTime();
-            if (durMs < MIN_STOP_MS) return;
+        const stopEventsAsc = [...stopEventsDesc].reverse();
 
-            const radius = Number(meta?.radius_m);
-            if (Number.isNaN(radius) || radius < MIN_R || radius > MAX_R) return;
+        const latestStopEvent = stopEventsDesc[0] ?? null;
+        let latestStopMarker: L.Marker | null = null;
+        let latestStopCoords: [number, number] | null = null;
+        const snappedStopPoints: [number, number][] = [];
+        const stopMarkers: L.Marker[] = [];
 
-            const snapped = snapToRoute(coords, Number(stop.latitude), Number(stop.longitude));
+        stopEventsAsc.forEach((stop, index) => {
+          const snapped = snapToRoute(coords, Number(stop.latitude), Number(stop.longitude));
+          const isLatestStop = index === stopEventsAsc.length - 1;
 
-            const stopHtml = `
-              <div style="position:relative;width:18px;height:18px;">
-                <div style="
-                  position:absolute;inset:0;
-                  background:#f59e0b33;
-                  border-radius:50%;
-                  animation:pulse 1.4s ease-out infinite;
-                "></div>
-                ${dotHtml('#f59e0b', 14, true)}
-              </div>`;
+          const marker = L.marker(snapped, {
+            icon: L.divIcon({ className: '', html: dotHtml(isLatestStop ? '#ef4444' : '#f59e0b', isLatestStop ? 16 : 14, true), iconSize: [16, 16], iconAnchor: [8, 8] }),
+            zIndexOffset: isLatestStop ? 220 : 200,
+          }).bindPopup(popupCard([
+            { label: 'Event', value: isLatestStop ? 'Last Stop' : 'Stop' },
+            { label: 'Time', value: fmt(new Date(stop.created_at)) },
+          ], isLatestStop ? 'Last Stop' : 'Stop'), { closeButton: false });
 
-            addLayer(
-              L.marker(snapped, {
-                icon: L.divIcon({ className: '', html: stopHtml, iconSize: [18, 18], iconAnchor: [9, 9] }),
-                zIndexOffset: 200,
-              }).bindPopup(
-                popupCard([
-                  { label: 'Duration', value: `${Math.round(durMs / 60000)} min` },
-                  { label: 'Radius',   value: `${radius} m` },
-                ], 'Stop'),
-                { closeButton: false }
-              )
-            );
-          });
+          addLayer(marker);
+          snappedStopPoints.push(snapped);
+          stopMarkers.push(marker);
+
+          if (isLatestStop) {
+            latestStopMarker = marker;
+            latestStopCoords = snapped;
+          }
+        });
+
+        routeMarkerRefs.current.lastStop = latestStopMarker;
+        stopMarkersRef.current = stopMarkers;
+        setLastStopPoint(latestStopCoords);
+        setLastStopRecorded(Boolean(latestStopEvent));
+        setStopPoints(snappedStopPoints);
+        setActiveStopIndex(snappedStopPoints.length > 0 ? snappedStopPoints.length - 1 : 0);
 
         map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
 
@@ -333,17 +384,11 @@ const clearRoute = () => {
     return drivers
       .filter(driver => locations.has(driver.driver_id))
 
-      // online filter
-      .filter(driver => {
-        if (!onlineOnly) return true;
-        return driver.online_status === "online";
-      })
-
       .map(driver => ({
         ...driver,
         location: locations.get(driver.driver_id)
       }));
-  }, [drivers, locations, onlineOnly, vehicleFilter]);
+  }, [drivers, locations, vehicleFilter]);
 
   const previousShiftOptions = useMemo(() => {
     return previousShifts.filter((shift) => Boolean(shift.id && shift.ended_at));
@@ -351,11 +396,7 @@ const clearRoute = () => {
 
   const formatPreviousShiftLabel = useCallback((shift: ShiftFull) => {
     const dateLabel = shift.started_at
-      ? new Date(shift.started_at).toLocaleDateString([], {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-        })
+      ? formatPerthDateTime(shift.started_at)
       : 'Unknown date';
 
     return `${shift.vehicle_rego ?? 'Unknown Vehicle'} | ${dateLabel} | ${shift.driver_name ?? 'Unknown Driver'}`;
@@ -529,18 +570,8 @@ const clearRoute = () => {
               <div>
                 <CardTitle className="text-white">Live Map</CardTitle>
                 <CardDescription className="text-gray-400">
-                  Pin locations update in realtime via Supabase
+                  Pin locations update in realtime via Supabase. All timestamps shown in {PERTH_TIME_LABEL}.
                 </CardDescription>
-              </div>
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                {/* <Input
-                  type="search"
-                  placeholder="Search drivers..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
-                /> */}
               </div>
             </div>
           </CardHeader>
@@ -553,6 +584,58 @@ const clearRoute = () => {
                 </div>
               </div>
             )}
+              <div className="mb-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="bg-green-700 text-white hover:bg-green-600"
+                  disabled={!startPoint}
+                  onClick={() => flyToQuickPoint(startPoint, routeMarkerRefs.current.start)}
+                >
+                  Start Location
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="bg-blue-700 text-white hover:bg-blue-600"
+                  disabled={!latestPoint}
+                  onClick={() => flyToQuickPoint(latestPoint, routeMarkerRefs.current.latest)}
+                >
+                  {latestLabel} Location
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="bg-red-700 text-white hover:bg-red-600 disabled:bg-gray-700 disabled:text-gray-300"
+                  disabled={!lastStopPoint}
+                  onClick={() => flyToQuickPoint(lastStopPoint, routeMarkerRefs.current.lastStop)}
+                >
+                  {lastStopRecorded ? 'Last Stop' : 'No stops recorded'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="bg-[#1D4ED8] text-white hover:bg-[#1E40AF] disabled:bg-gray-700 disabled:text-gray-300"
+                  disabled={stopPoints.length < 2}
+                  onClick={goToPreviousStop}
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Prev Stop
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="bg-[#7C3AED] text-white hover:bg-[#6D28D9] disabled:bg-gray-700 disabled:text-gray-300"
+                  disabled={stopPoints.length < 2}
+                  onClick={goToNextStop}
+                >
+                  Next Stop
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+                <span className="text-xs text-gray-400 self-center">
+                  {stopPoints.length > 0 ? `Stop ${activeStopIndex + 1} of ${stopPoints.length}` : 'No stops'}
+                </span>
+              </div>
               <div className="h-[520px] relative">
                 <div ref={mapRef} className="absolute inset-0" />
               </div>
@@ -568,15 +651,6 @@ const clearRoute = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label className="text-gray-300">Online only</Label>
-                <input
-                  type="checkbox"
-                  checked={onlineOnly}
-                  onChange={(e) => setOnlineOnly(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-700 bg-[#0F0F0F]"
-                />
-              </div>
               <div className="space-y-2">
                 <Label className="text-gray-300">Vehicle</Label>
                 <Select value={vehicleFilter} onValueChange={setVehicleFilter}>

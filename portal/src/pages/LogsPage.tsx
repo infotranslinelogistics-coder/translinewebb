@@ -1,36 +1,82 @@
-// Driver logs and incident reports page
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router';
+import {
+  AlertCircle,
+  AlertTriangle,
+  ExternalLink,
+  FileText,
+  Image as ImageIcon,
+  Loader,
+  MapPin,
+  Search,
+  Wrench,
+} from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
-import { Search, Eye, AlertCircle, Wrench, AlertTriangle, FileText } from 'lucide-react';
-import { format } from 'date-fns';
-import { useNavigate } from 'react-router';
-
-
-import { useEffect } from 'react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/app/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
+import { formatPerthDateTime, PERTH_TIME_LABEL } from '@/lib/dateTime';
 
 type LogType = 'incident' | 'maintenance' | 'accident' | 'general';
 type FilterType = 'all' | LogType;
 
-const severityWeight: Record<string, number> = {
-  high: 3,
-  medium: 2,
-  low: 1,
+type DriverLogRow = {
+  id: string;
+  shift_id: string | null;
+  driver_name: string | null;
+  vehicle_rego: string | null;
+  description: string;
+  category: LogType;
+  severity: string;
+  created_at: string;
+  latitude: number | null;
+  longitude: number | null;
+  photo_path: string | null;
+  photo_url?: string | null;
 };
 
-function normalizeLogType(rawType?: string | null): LogType {
-  const value = (rawType ?? '').toLowerCase();
-  if (value === 'incident') return 'incident';
-  if (value === 'maintenance' || value === 'maintenance_issue') return 'maintenance';
-  if (value === 'accident') return 'accident';
+const PHOTO_BUCKET = 'driver_log_photos';
+
+function toText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function normalizeLogType(value: unknown): LogType {
+  const text = (toText(value) ?? '').toLowerCase();
+  if (text.includes('incident')) return 'incident';
+  if (text.includes('maintenance')) return 'maintenance';
+  if (text.includes('accident')) return 'accident';
   return 'general';
 }
 
-function getLogTypeLabel(type: LogType): string {
+function formatDateTime(value: string): string {
+  return formatPerthDateTime(value);
+}
+
+function getTypeLabel(type: LogType): string {
   switch (type) {
     case 'incident':
       return 'Incidents';
@@ -43,300 +89,432 @@ function getLogTypeLabel(type: LogType): string {
   }
 }
 
-export interface DriverLog {
-  id: string;
-  driver_name: string;
-  vehicle_plate: string;
-  log_type: LogType;
-  description: string;
-  created_at: string;
-  severity: string;
+function getTypeIcon(type: LogType) {
+  switch (type) {
+    case 'incident':
+      return AlertCircle;
+    case 'maintenance':
+      return Wrench;
+    case 'accident':
+      return AlertTriangle;
+    default:
+      return FileText;
+  }
+}
+
+function getTypeBadge(type: LogType): string {
+  switch (type) {
+    case 'incident':
+      return 'bg-orange-950 text-orange-400 border-orange-900';
+    case 'maintenance':
+      return 'bg-yellow-950 text-yellow-400 border-yellow-900';
+    case 'accident':
+      return 'bg-red-950 text-red-400 border-red-900';
+    default:
+      return 'bg-blue-950 text-blue-400 border-blue-900';
+  }
+}
+
+function getSeverityBadge(severity: string): string {
+  const normalized = severity.toLowerCase();
+  if (normalized === 'high') return 'bg-red-950 text-red-400 border-red-900';
+  if (normalized === 'medium') return 'bg-yellow-950 text-yellow-400 border-yellow-900';
+  if (normalized === 'low') return 'bg-blue-950 text-blue-400 border-blue-900';
+  return 'bg-gray-800 text-gray-300 border-gray-700';
+}
+
+function mapFromRecord(row: Record<string, unknown>): DriverLogRow {
+  const metadata = row.metadata && typeof row.metadata === 'object' ? (row.metadata as Record<string, unknown>) : {};
+
+  return {
+    id: String(row.id),
+    shift_id: toText(row.shift_id),
+    driver_name: toText(row.driver_name) ?? toText(metadata.driver_name),
+    vehicle_rego:
+      toText(row.vehicle_rego) ??
+      toText(row.vehicle_plate) ??
+      toText(metadata.vehicle_rego) ??
+      toText(metadata.vehicle_plate),
+    description:
+      toText(row.description) ?? toText(row.notes) ?? toText(metadata.description) ?? toText(metadata.notes) ?? '—',
+    category: normalizeLogType(
+      row.category ?? row.log_type ?? row.type ?? row.event_type ?? metadata.category ?? metadata.log_type,
+    ),
+    severity: toText(row.severity) ?? toText(metadata.severity) ?? 'low',
+    created_at: toText(row.created_at) ?? new Date().toISOString(),
+    latitude: toNumber(row.latitude) ?? toNumber(row.lat) ?? toNumber(metadata.latitude) ?? toNumber(metadata.lat),
+    longitude: toNumber(row.longitude) ?? toNumber(row.lng) ?? toNumber(metadata.longitude) ?? toNumber(metadata.lng),
+    photo_path: toText(row.photo_path) ?? toText(metadata.photo_path),
+  };
+}
+
+async function withSignedPhotoUrl(row: DriverLogRow): Promise<DriverLogRow> {
+  if (!row.photo_path) return { ...row, photo_url: null };
+
+  const { data, error } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(row.photo_path, 3600);
+  if (error || !data?.signedUrl) {
+    console.error('[Logs photo] failed to create signed url', { path: row.photo_path, error });
+    return { ...row, photo_url: null };
+  }
+
+  return { ...row, photo_url: data.signedUrl };
 }
 
 export function LogsPage() {
-  const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<FilterType>('all');
-  const [logs, setLogs] = useState<DriverLog[]>([]);
+  const [logs, setLogs] = useState<DriverLogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<FilterType>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [deleteLogId, setDeleteLogId] = useState<string | null>(null);
+  const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
+
+  const fetchLogs = async () => {
+    try {
+      setLoading(true);
+
+      const { data: viewData, error: viewError } = await supabase
+        .from('driver_logs_admin')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      let sourceRows: Record<string, unknown>[] = [];
+
+      if (viewError) {
+        console.error('driver_logs_admin query failed, falling back to shift_events', viewError);
+
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('shift_events')
+          .select('id, shift_id, created_at, metadata, latitude, longitude')
+          .eq('event_type', 'driver_log')
+          .order('created_at', { ascending: false });
+
+        if (fallbackError) throw fallbackError;
+        sourceRows = ((fallbackData ?? []) as Record<string, unknown>[]).map((row) => ({
+          ...row,
+          event_type: 'driver_log',
+        }));
+      } else {
+        sourceRows = (viewData ?? []) as Record<string, unknown>[];
+      }
+
+      const mappedRows = sourceRows.map(mapFromRecord);
+      const hydratedRows = await Promise.all(mappedRows.map(withSignedPhotoUrl));
+      setLogs(hydratedRows);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to load logs', err);
+      setLogs([]);
+      setError('Failed to load logs');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchLogs = async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('driver_logs')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (error) throw error;
-        const normalizedLogs = (data || []).map((row) => ({
-          ...row,
-          log_type: normalizeLogType(row.log_type),
-        })) as DriverLog[];
-        setLogs(normalizedLogs);
-      } catch (err) {
-        setError('Failed to load logs');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchLogs();
   }, []);
 
-  const normalizedQuery = searchQuery.toLowerCase();
+  const summary = useMemo(() => {
+    const incidents = logs.filter((log) => log.category === 'incident').length;
+    const maintenance = logs.filter((log) => log.category === 'maintenance').length;
+    const accidents = logs.filter((log) => log.category === 'accident').length;
 
-  const filteredLogs = logs.filter((log) => {
-    const matchesSearch =
-      (log.driver_name ?? '').toLowerCase().includes(normalizedQuery) ||
-      (log.vehicle_plate ?? '').toLowerCase().includes(normalizedQuery) ||
-      (log.description ?? '').toLowerCase().includes(normalizedQuery);
+    return {
+      total: logs.length,
+      incidents,
+      maintenance,
+      accidents,
+    };
+  }, [logs]);
 
-    const matchesType = filterType === 'all' || log.log_type === filterType;
+  const filteredLogs = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return logs.filter((log) => {
+      if (filterType !== 'all' && log.category !== filterType) return false;
+      if (!query) return true;
 
-    return matchesSearch && matchesType;
-  });
-
-  const sortedLogs = useMemo(() => {
-    return [...filteredLogs].sort((a, b) => {
-      const dateDelta = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      if (dateDelta !== 0) return dateDelta;
-
-      return (severityWeight[b.severity?.toLowerCase()] ?? 0) - (severityWeight[a.severity?.toLowerCase()] ?? 0);
+      const haystack = [log.description, log.driver_name ?? '', log.vehicle_rego ?? ''].join(' ').toLowerCase();
+      return haystack.includes(query);
     });
-  }, [filteredLogs]);
+  }, [filterType, logs, searchQuery]);
 
-  const handleMaintenanceRoute = () => {
-    navigate('/maintenance');
-  };
+  const handleDeleteLog = async () => {
+    if (!deleteLogId) return;
 
-  const getLogIcon = (type: string) => {
-    switch (type) {
-      case 'incident':
-        return AlertCircle;
-      case 'maintenance':
-        return Wrench;
-      case 'accident':
-        return AlertTriangle;
-      default:
-        return FileText;
-    }
-  };
+    const logId = deleteLogId;
+    setDeletingLogId(logId);
 
-  const getLogTypeBadge = (type: string) => {
-    switch (type) {
-      case 'incident':
-        return 'bg-orange-950 text-orange-400 border-orange-900';
-      case 'maintenance':
-        return 'bg-yellow-950 text-yellow-400 border-yellow-900';
-      case 'accident':
-        return 'bg-red-950 text-red-400 border-red-900';
-      default:
-        return 'bg-blue-950 text-blue-400 border-blue-900';
-    }
-  };
+    try {
+      const { error: deleteError } = await supabase.rpc('delete_driver_log_admin', {
+        p_event_id: logId,
+      });
 
-  const getSeverityBadge = (severity: string) => {
-    switch (severity) {
-      case 'high':
-        return 'bg-red-950 text-red-400 border-red-900';
-      case 'medium':
-        return 'bg-yellow-950 text-yellow-400 border-yellow-900';
-      default:
-        return 'bg-gray-800 text-gray-400 border-gray-700';
+      if (deleteError) {
+        console.error('delete_driver_log_admin RPC error', {
+          logId,
+          code: deleteError.code,
+          message: deleteError.message,
+          details: deleteError.details,
+          hint: deleteError.hint,
+        });
+        throw deleteError;
+      }
+
+      await fetchLogs();
+      setDeleteLogId(null);
+      setError(null);
+    } catch (err) {
+      console.error('handleDeleteLog failed', {
+        logId,
+        error: err,
+      });
+      setError('Failed to delete log');
+      setDeleteLogId(null);
+    } finally {
+      setDeletingLogId(null);
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
+      {error && (
+        <Card className="bg-red-950 border-red-900">
+          <CardContent className="p-4 text-red-400">{error}</CardContent>
+        </Card>
+      )}
+
       <div>
         <h1 className="text-3xl font-bold text-white mb-2">Logs</h1>
-        <p className="text-gray-400">Driver logs, incidents, and reports</p>
+        <p className="text-gray-400">Driver logs and reports. All times shown in {PERTH_TIME_LABEL}.</p>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <Card className="bg-[#161616] border-gray-800">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Total Logs</p>
-            <p className="text-3xl font-bold text-white">{logs.length}</p>
+            <p className="text-3xl font-bold text-white">{summary.total}</p>
           </CardContent>
         </Card>
         <Card className="bg-[#161616] border-gray-800">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Incidents</p>
-            <p className="text-3xl font-bold text-orange-400">
-              {logs.filter((l) => l.log_type === 'incident').length}
-            </p>
+            <p className="text-3xl font-bold text-orange-400">{summary.incidents}</p>
           </CardContent>
         </Card>
         <Card className="bg-[#161616] border-gray-800">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Maintenance</p>
-            <p className="text-3xl font-bold text-yellow-400">
-              {logs.filter((l) => l.log_type === 'maintenance').length}
-            </p>
+            <p className="text-3xl font-bold text-yellow-400">{summary.maintenance}</p>
           </CardContent>
         </Card>
         <Card className="bg-[#161616] border-gray-800">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Accidents</p>
-            <p className="text-3xl font-bold text-red-400">
-              {logs.filter((l) => l.log_type === 'accident').length}
-            </p>
+            <p className="text-3xl font-bold text-red-400">{summary.accidents}</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Logs table */}
       <Card className="bg-[#161616] border-gray-800">
         <CardHeader>
           <div className="flex flex-col gap-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <CardTitle className="text-white">All Logs</CardTitle>
-                <CardDescription className="text-gray-400">
-                  View driver-submitted logs and reports
-                </CardDescription>
+                <CardDescription className="text-gray-400">Search by description, driver, or vehicle in {PERTH_TIME_LABEL}</CardDescription>
               </div>
-              <div className="relative w-full sm:w-64">
+              <div className="relative w-full sm:w-72">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <Input
                   type="search"
                   placeholder="Search logs..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(event) => setSearchQuery(event.target.value)}
                   className="pl-10 bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
                 />
               </div>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <Button
-                variant={filterType === 'all' ? 'default' : 'outline'}
-                onClick={() => setFilterType('all')}
-                className={
-                  filterType === 'all'
-                    ? 'bg-[#FF6B35] hover:bg-[#E55A2B] text-white'
-                    : 'border-gray-700 text-gray-400 hover:text-white'
-                }
-              >
-                All
-              </Button>
-              <Button
-                variant={filterType === 'incident' ? 'default' : 'outline'}
-                onClick={() => setFilterType('incident')}
-                className={
-                  filterType === 'incident'
-                    ? 'bg-[#FF6B35] hover:bg-[#E55A2B] text-white'
-                    : 'border-gray-700 text-gray-400 hover:text-white'
-                }
-              >
-                Incidents
-              </Button>
-              <Button
-                variant={filterType === 'maintenance' ? 'default' : 'outline'}
-                onClick={() => setFilterType('maintenance')}
-                className={
-                  filterType === 'maintenance'
-                    ? 'bg-[#FF6B35] hover:bg-[#E55A2B] text-white'
-                    : 'border-gray-700 text-gray-400 hover:text-white'
-                }
-              >
-                Maintenance
-              </Button>
-              <Button
-                variant={filterType === 'accident' ? 'default' : 'outline'}
-                onClick={() => setFilterType('accident')}
-                className={
-                  filterType === 'accident'
-                    ? 'bg-[#FF6B35] hover:bg-[#E55A2B] text-white'
-                    : 'border-gray-700 text-gray-400 hover:text-white'
-                }
-              >
-                Accidents
-              </Button>
-              <Button
-                variant={filterType === 'general' ? 'default' : 'outline'}
-                onClick={() => setFilterType('general')}
-                className={
-                  filterType === 'general'
-                    ? 'bg-[#FF6B35] hover:bg-[#E55A2B] text-white'
-                    : 'border-gray-700 text-gray-400 hover:text-white'
-                }
-              >
-                General
-              </Button>
+              {(['all', 'incident', 'maintenance', 'accident', 'general'] as FilterType[]).map((type) => (
+                <Button
+                  key={type}
+                  variant={filterType === type ? 'default' : 'outline'}
+                  onClick={() => setFilterType(type)}
+                  className={
+                    filterType === type
+                      ? 'bg-[#FF6B35] hover:bg-[#E55A2B] text-white'
+                      : 'border-gray-700 text-gray-400 hover:text-white'
+                  }
+                >
+                  {type === 'all'
+                    ? 'All'
+                    : type === 'incident'
+                      ? 'Incidents'
+                      : type === 'maintenance'
+                        ? 'Maintenance'
+                        : type === 'accident'
+                          ? 'Accidents'
+                          : 'General'}
+                </Button>
+              ))}
             </div>
           </div>
         </CardHeader>
+
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-gray-800 hover:bg-transparent">
-                  <TableHead className="text-gray-400">Type</TableHead>
-                  <TableHead className="text-gray-400">Driver</TableHead>
-                  <TableHead className="text-gray-400">Vehicle</TableHead>
-                  <TableHead className="text-gray-400">Description</TableHead>
-                  <TableHead className="text-gray-400">Date/Time</TableHead>
-                  <TableHead className="text-gray-400">Severity</TableHead>
-                  <TableHead className="text-gray-400 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedLogs.map((log) => {
-                  const Icon = getLogIcon(log.log_type);
-                  return (
-                    <TableRow
-                      key={log.id}
-                      className="border-gray-800"
-                      onClick={log.log_type === 'maintenance' ? handleMaintenanceRoute : undefined}
-                    >
-                      <TableCell>
-                        <Badge className={getLogTypeBadge(log.log_type)}>
-                          <Icon className="w-3 h-3 mr-1" />
-                          {getLogTypeLabel(log.log_type)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium text-white">{log.driver_name}</TableCell>
-                      <TableCell className="text-gray-300">{log.vehicle_plate}</TableCell>
-                      <TableCell className="text-gray-300 max-w-xs truncate">
-                        {log.description}
-                      </TableCell>
-                      <TableCell className="text-gray-300">
-                        {log.created_at ? format(new Date(log.created_at), 'MMM dd, HH:mm') : '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getSeverityBadge(log.severity)}>
-                          {log.severity}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-gray-400 hover:text-white h-8 w-8 p-0"
-                            onClick={() => {
-                              if (log.log_type === 'maintenance') {
-                                handleMaintenanceRoute();
-                                return;
-                              }
-                            }}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        </div>
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <Loader className="w-8 h-8 text-[#FF6B35] animate-spin" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-gray-800 hover:bg-transparent">
+                    <TableHead className="text-gray-400">Type/category</TableHead>
+                    <TableHead className="text-gray-400">Driver</TableHead>
+                    <TableHead className="text-gray-400">Vehicle</TableHead>
+                    <TableHead className="text-gray-400">Description</TableHead>
+                    <TableHead className="text-gray-400">Date/time</TableHead>
+                    <TableHead className="text-gray-400">Severity</TableHead>
+                    <TableHead className="text-gray-400">Location / Maps</TableHead>
+                    <TableHead className="text-gray-400">Photo</TableHead>
+                    <TableHead className="text-gray-400">Shift</TableHead>
+                    <TableHead className="text-right text-gray-400">Delete</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredLogs.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={10} className="text-center py-8 text-gray-500">
+                        No logs found
                       </TableCell>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                  ) : (
+                    filteredLogs.map((log) => {
+                      const Icon = getTypeIcon(log.category);
+                      const hasLocation = log.latitude != null && log.longitude != null;
+
+                      return (
+                        <TableRow key={log.id} className="border-gray-800">
+                          <TableCell>
+                            <Badge className={getTypeBadge(log.category)}>
+                              <Icon className="w-3 h-3 mr-1" />
+                              {getTypeLabel(log.category)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-gray-300">{log.driver_name ?? '—'}</TableCell>
+                          <TableCell className="text-gray-300">{log.vehicle_rego ?? '—'}</TableCell>
+                          <TableCell className="text-gray-300 max-w-[24rem]">{log.description}</TableCell>
+                          <TableCell className="text-gray-300">{formatDateTime(log.created_at)}</TableCell>
+                          <TableCell>
+                            <Badge className={getSeverityBadge(log.severity)}>{log.severity}</Badge>
+                          </TableCell>
+                          <TableCell className="text-gray-300 text-xs">
+                            {hasLocation ? (
+                              <div className="space-y-1">
+                                <p>
+                                  {log.latitude?.toFixed(5)}, {log.longitude?.toFixed(5)}
+                                </p>
+                                <a
+                                  href={`https://www.google.com/maps?q=${log.latitude},${log.longitude}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-[#FF6B35] hover:underline"
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                  Open in Maps
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </div>
+                            ) : (
+                              '—'
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {log.photo_path && log.photo_url ? (
+                              <Button
+                                size="sm"
+                                className="bg-[#FF6B35] text-white hover:bg-[#e55a25] text-xs"
+                                onClick={() => setPreviewUrl(log.photo_url ?? null)}
+                              >
+                                <ImageIcon className="w-3.5 h-3.5 mr-1" />
+                                View
+                              </Button>
+                            ) : (
+                              '—'
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {log.shift_id ? (
+                              <Button asChild size="sm" className="bg-[#FF6B35] text-white hover:bg-[#e55a25] text-xs">
+                                <Link to={`/shifts/${log.shift_id}`}>Shift Details</Link>
+                              </Button>
+                            ) : (
+                              '—'
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="bg-red-700 text-white hover:bg-red-600 text-xs"
+                              disabled={deletingLogId === log.id}
+                              onClick={() => setDeleteLogId(log.id)}
+                            >
+                              {deletingLogId === log.id ? 'Deleting...' : 'Delete Log'}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      <Dialog open={Boolean(previewUrl)} onOpenChange={(open) => !open && setPreviewUrl(null)}>
+        <DialogContent className="bg-[#161616] border-gray-800 max-w-3xl [&>button]:text-[#FF6B35] [&>button:hover]:text-[#e55a25]">
+          <DialogHeader>
+            <DialogTitle className="text-white">Driver Log Photo</DialogTitle>
+          </DialogHeader>
+          {previewUrl ? (
+            <img
+              src={previewUrl}
+              alt="Driver log"
+              className="w-full max-h-[75vh] object-contain rounded-lg border border-gray-800"
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={Boolean(deleteLogId)} onOpenChange={(open) => !open && setDeleteLogId(null)}>
+        <AlertDialogContent className="bg-[#161616] border-gray-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Delete Log</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              This will permanently delete the selected log. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex gap-4">
+            <AlertDialogCancel className="bg-gray-800 text-gray-300 hover:bg-gray-700" disabled={Boolean(deletingLogId)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteLog}
+              className="bg-red-600 text-white hover:bg-red-700"
+              disabled={Boolean(deletingLogId)}
+            >
+              {deletingLogId ? 'Deleting...' : 'Delete Log'}
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

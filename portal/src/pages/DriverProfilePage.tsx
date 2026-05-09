@@ -9,12 +9,13 @@ import {
   ArrowLeft, Loader, MapPin, Clock, TrendingUp, Activity, Navigation, PhoneCall, Mail,
 } from 'lucide-react';
 import {
-  format, formatDistanceToNowStrict, differenceInMinutes, startOfWeek, endOfWeek,
+  formatDistanceToNowStrict, differenceInMinutes, startOfWeek, endOfWeek,
 } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { listLatestLocationsByDrivers } from '@/lib/db/locations';
 import { listVehicles, Vehicle } from '@/lib/db/vehicles';
 import { clearOdometerPhotoCache, getOdometerPhotoUrl } from '@/lib/storage/odometerPhotos';
+import { formatPerthDateTime } from '@/lib/dateTime';
 
 /* ─── types ─── */
 interface DriverStatusRow {
@@ -53,8 +54,7 @@ interface DriverLocationRow {
 const PAGE_SIZE = 10;
 
 function fmtDate(d: string | null | undefined) {
-  if (!d) return '—';
-  return format(new Date(d), 'MMM dd, HH:mm');
+  return formatPerthDateTime(d);
 }
 function statusBadge(s: string | null | undefined) {
   if (s === 'active') return 'bg-blue-950 text-blue-300 border-blue-800';

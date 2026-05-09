@@ -1,6 +1,6 @@
 // Main dashboard layout with sidebar and header
 import React, { useState } from 'react';
-import { Outlet, Link, useLocation } from 'react-router';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
@@ -38,11 +38,14 @@ const navigation = [
 export function DashboardLayout() {
   const { user, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onlineDrivers] = useState(12); // Mock data - replace with real data
 
   const handleLogout = async () => {
     await signOut();
+    setSidebarOpen(false);
+    navigate('/login', { replace: true });
   };
 
   return (

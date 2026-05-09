@@ -34,13 +34,6 @@ export async function listDrivers(): Promise<Driver[]> {
       full_name,
       status,
       user_id,
-      vehicle_assignments!left (
-        vehicle_id,
-        active,
-        vehicles (
-          rego
-        )
-      ),
       driver_presence!left (
         device_id,
         shift_id,
@@ -56,20 +49,34 @@ export async function listDrivers(): Promise<Driver[]> {
     .map(d => d.user_id)
     .filter(Boolean);
 
-  const { data: profiles, error: profilesError } = await supabase
-    .from('profiles')
-    .select('id, phone')
-    .in('id', userIds);
+  const [profilesResponse, vehicleAssignmentsResponse] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, phone')
+      .in('id', userIds),
+    supabase
+      .from('vehicles_with_driver')
+      .select('vehicle_id, rego, driver_id'),
+  ]);
+
+  const { data: profiles, error: profilesError } = profilesResponse;
+  const { data: vehicleAssignments, error: vehicleAssignmentsError } = vehicleAssignmentsResponse;
 
   if (profilesError) throw profilesError;
+  if (vehicleAssignmentsError) throw vehicleAssignmentsError;
 
   const profileMap = new Map(
     (profiles || []).map(p => [p.id, p])
   );
 
+  const vehicleByDriverId = new Map(
+    ((vehicleAssignments || []) as Array<{ vehicle_id: string | null; rego: string | null; driver_id: string | null }>)
+      .filter((assignment) => Boolean(assignment.driver_id))
+      .map((assignment) => [assignment.driver_id as string, assignment])
+  );
+
   return (drivers || []).map((d: any) => {
-    const activeAssignment = (d.vehicle_assignments || [])
-      .find((va: any) => va.active);
+    const assignment = vehicleByDriverId.get(d.id);
 
     const presence = Array.isArray(d.driver_presence)
       ? d.driver_presence[0]
@@ -84,8 +91,8 @@ export async function listDrivers(): Promise<Driver[]> {
       auth_user_id: d.user_id,
       phone: profile?.phone || null,
 
-      current_vehicle_id: activeAssignment?.vehicle_id || null,
-      current_vehicle_rego: activeAssignment?.vehicles?.rego || null,
+      current_vehicle_id: assignment?.vehicle_id || null,
+      current_vehicle_rego: assignment?.rego || null,
 
       online_status: presence?.status || 'offline',
       device_id: presence?.device_id || null,
