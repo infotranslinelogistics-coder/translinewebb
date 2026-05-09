@@ -1,10 +1,15 @@
 // Main dashboard page with real data from Supabase
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
+import { Button } from '@/app/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Users, Truck, Calendar, Wrench, AlertCircle, TrendingUp, Loader, Activity, ShieldAlert, ClipboardList } from 'lucide-react';
-import { getDashboardStats, DashboardStats, listActivityLogs, ActivityLog } from '@/lib/db/dashboard';
+import { getDashboardStats, DashboardStats } from '@/lib/db/dashboard';
 import { supabase } from '@/lib/supabase';
+import { PERTH_TIME_LABEL } from '@/lib/dateTime';
+import { useInbox } from '@/contexts/InboxContext';
 
 function startOfToday(): Date {
   const d = new Date();
@@ -13,13 +18,16 @@ function startOfToday(): Date {
 }
 
 export function DashboardPage() {
+  const navigate = useNavigate();
+  const { notifications, busyId: alertBusyId, acknowledge, complete } = useInbox();
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeShiftCount, setActiveShiftCount] = useState(0);
   const [forceEndedToday, setForceEndedToday] = useState(0);
   const [adminActionsToday, setAdminActionsToday] = useState(0);
+  const [serviceAlertOpen, setServiceAlertOpen] = useState(false);
+  const autoOpenedRef = useRef(false);
 
   const fetchActiveShiftCount = useCallback(async () => {
     const { count, error: err } = await supabase
@@ -49,16 +57,20 @@ export function DashboardPage() {
     setAdminActionsToday(count || 0);
   }, []);
 
+  // Auto-open popup once on first load if there are unacknowledged alerts
+  useEffect(() => {
+    if (!autoOpenedRef.current && notifications.length > 0) {
+      autoOpenedRef.current = true;
+      setServiceAlertOpen(true);
+    }
+  }, [notifications.length]);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         setError(null);
-        const [dashboardStats, logs] = await Promise.all([
-          getDashboardStats(),
-          listActivityLogs(10),
-        ]);
+        const dashboardStats = await getDashboardStats();
         setStats(dashboardStats);
-        setActivityLogs(logs);
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err);
         setError('Failed to load dashboard data. Please try again.');
@@ -170,6 +182,23 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {notifications.length > 0 && (
+        <Card className="bg-yellow-950/30 border-yellow-900">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="text-yellow-300 font-medium">Service due soon</p>
+              <p className="text-yellow-400 text-sm">{notifications.length} open automatic service alert(s)</p>
+            </div>
+            <Button
+              onClick={() => setServiceAlertOpen(true)}
+              className="bg-yellow-600 text-black hover:bg-yellow-500"
+            >
+              View alerts
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Page header */}
       <div>
         <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
@@ -242,41 +271,6 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* Activity Feed */}
-      <Card className="bg-[#161616] border-gray-800">
-        <CardHeader>
-          <CardTitle className="text-white">Recent Activity</CardTitle>
-          <CardDescription className="text-gray-400">Admin actions and system events</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {activityLogs.length === 0 ? (
-            <p className="text-gray-400 text-sm">No recent activity</p>
-          ) : (
-            <div className="space-y-4">
-              {activityLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className="flex items-start justify-between p-3 bg-[#0F0F0F] rounded-lg border border-gray-800"
-                >
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-white capitalize">{log.action}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {log.resource_type} · {log.resource_id}
-                    </p>
-                    {log.details && (
-                      <p className="text-xs text-gray-400 mt-1">{log.details}</p>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 whitespace-nowrap ml-2">
-                    {new Date(log.created_at).toLocaleDateString()} {new Date(log.created_at).toLocaleTimeString()}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Stats Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="bg-[#161616] border-gray-800">
@@ -315,6 +309,79 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={serviceAlertOpen} onOpenChange={setServiceAlertOpen}>
+        <DialogContent className="bg-[#161616] border-gray-800 max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="text-white">Service due soon</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Open maintenance alerts. Times shown in {PERTH_TIME_LABEL}.
+            </DialogDescription>
+          </DialogHeader>
+
+          {notifications.length === 0 ? (
+            <p className="text-sm text-gray-400">No open service alerts.</p>
+          ) : (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {notifications.map((notification) => {
+                const itemId = notification.maintenance_item_id;
+                const busy = alertBusyId === itemId;
+                return (
+                  <div key={itemId} className="rounded-lg border border-gray-800 bg-[#0F0F0F] p-3">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-sm">
+                      <div>
+                        <p className="text-gray-500">Vehicle</p>
+                        <p className="text-gray-200">{notification.vehicle_rego ?? notification.vehicle_id ?? 'Unknown'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Current km</p>
+                        <p className="text-gray-200">{notification.current_km != null ? `${Math.round(notification.current_km).toLocaleString()} km` : '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Target service km</p>
+                        <p className="text-gray-200">{notification.target_service_km != null ? `${Math.round(notification.target_service_km).toLocaleString()} km` : '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">KM remaining</p>
+                        <p className="text-gray-200">{notification.km_remaining != null ? `${Math.round(notification.km_remaining).toLocaleString()} km` : '—'}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        className="bg-[#FF6B35] text-white hover:bg-[#E55A2B]"
+                        disabled={busy}
+                        onClick={() => acknowledge(itemId)}
+                      >
+                        Acknowledge
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="bg-green-600 text-white hover:bg-green-500"
+                        disabled={busy}
+                        onClick={() => complete(itemId)}
+                      >
+                        Mark completed
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-gray-300 hover:text-white"
+                        onClick={() => {
+                          setServiceAlertOpen(false);
+                          navigate('/maintenance');
+                        }}
+                      >
+                        Go to Maintenance page
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

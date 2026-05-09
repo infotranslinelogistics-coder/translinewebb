@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
@@ -27,14 +28,16 @@ interface Vehicle {
   status: string;
   driver_name?: string | null;
   driver_id?: string | null;
+  on_shift?: boolean;
 }
 
 interface Driver {
-  driver_id: string;
+  id: string;
   full_name: string;
 }
 
 export function VehiclesPage() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +47,7 @@ export function VehiclesPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [activeCount, setActiveCount] = useState(0);
   const [maintenanceCount, setMaintenanceCount] = useState(0);
+  const [onShiftCount, setOnShiftCount] = useState(0);
   const [formData, setFormData] = useState({
     rego: '',
     make: '',
@@ -66,11 +70,26 @@ export function VehiclesPage() {
     setTotalCount(vehiclesData.length);
     setActiveCount(vehiclesData.filter((v) => v.status === 'active').length);
     setMaintenanceCount(vehiclesData.filter((v) => v.status === 'maintenance').length);
+    setOnShiftCount(vehiclesData.filter((v) => Boolean(v.on_shift)).length);
   };
 
   async function fetchVehicles() {
     try {
-      const vehicles = await listVehiclesWithAssignments();
+      const [vehicles, activeShiftsResponse] = await Promise.all([
+        listVehiclesWithAssignments(),
+        supabase
+          .from('shifts')
+          .select('vehicle_id')
+          .or('status.eq.active,ended_at.is.null')
+          .not('vehicle_id', 'is', null),
+      ]);
+
+      const activeVehicleIds = new Set(
+        ((activeShiftsResponse.data ?? []) as Array<{ vehicle_id: string | null }>)
+          .map((row) => row.vehicle_id)
+          .filter((vehicleId): vehicleId is string => Boolean(vehicleId))
+      );
+
       return (vehicles as DbVehicle[]).map((vehicle) => ({
         id: vehicle.id,
         rego: vehicle.rego,
@@ -79,6 +98,7 @@ export function VehiclesPage() {
         status: vehicle.status,
         driver_id: vehicle.driver_id ?? null,
         driver_name: vehicle.driver_name ?? null,
+        on_shift: activeVehicleIds.has(vehicle.id),
       }));
     } catch (error) {
       console.error('fetchVehicles error:', error);
@@ -88,8 +108,8 @@ export function VehiclesPage() {
 
   async function fetchDrivers() {
     const { data, error } = await supabase
-      .from('drivers_with_current_vehicle')
-      .select('driver_id, full_name')
+      .from('drivers')
+      .select('id, full_name')
       .order('full_name');
 
     if (error) {
@@ -267,12 +287,13 @@ export function VehiclesPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
         {[
           { label: 'Total Vehicles', value: totalCount, color: 'text-white' },
           { label: 'Active', value: activeCount, color: 'text-green-400' },
+          { label: 'On Shift', value: onShiftCount, color: 'text-blue-400' },
           { label: 'In Maintenance', value: maintenanceCount, color: 'text-yellow-400' },
-          { label: 'Inactive', value: totalCount - activeCount - maintenanceCount, color: 'text-blue-400' },
+          { label: 'Inactive', value: totalCount - activeCount - maintenanceCount, color: 'text-gray-300' },
         ].map(({ label, value, color }) => (
           <Card key={label} className="bg-[#161616] border-gray-800">
             <CardContent className="p-6">
@@ -316,13 +337,14 @@ export function VehiclesPage() {
                     <TableHead className="text-gray-400">Make / Model</TableHead>
                     <TableHead className="text-gray-400">Driver</TableHead>
                     <TableHead className="text-gray-400">Status</TableHead>
+                    <TableHead className="text-gray-400">Shift</TableHead>
                     <TableHead className="text-gray-400 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredVehicles.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                         No vehicles found
                       </TableCell>
                     </TableRow>
@@ -341,7 +363,22 @@ export function VehiclesPage() {
                             <Badge className={getStatusBadge(vehicle.status)}>{vehicle.status}</Badge>
                           </TableCell>
                           <TableCell>
+                            {vehicle.on_shift ? (
+                              <Badge className="bg-blue-950 text-blue-300 border-blue-800">On Shift</Badge>
+                            ) : (
+                              <Badge className="bg-gray-900 text-gray-300 border-gray-700">Off Shift</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
                             <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-blue-400 hover:text-blue-300 h-8 px-2 text-xs"
+                                onClick={() => navigate(`/vehicles/${vehicle.id}`)}
+                              >
+                                Details
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -434,7 +471,7 @@ export function VehiclesPage() {
               >
                 <option value="">Unassigned</option>
                 {drivers.map((driver) => (
-                  <option key={driver.driver_id} value={String(driver.driver_id)}>
+                  <option key={driver.id} value={String(driver.id)}>
                     {driver.full_name}
                   </option>
                 ))}

@@ -12,7 +12,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Search, UserPlus, Trash2, Loader, Eye, Key } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useDriverLiveState, isOnlineFromLastSeen, type DriverLiveStatus } from '@/lib/realtime/useDriverLiveState';
-import { formatDistanceStrict, formatDistanceToNow } from 'date-fns';
+import { formatDistanceStrict } from 'date-fns';
+import { listDrivers } from '@/lib/db/drivers';
 
 type ShiftRow = {
   id: string;
@@ -33,6 +34,13 @@ type DriverCurrentStatusRow = {
   driver_id: string;
   status: string | null;
   shift_id: string | null;
+  last_location_at: string | null;
+  lat: number | null;
+  lng: number | null;
+  speed_kmh: number | null;
+  heading: number | null;
+  vehicle_id: string | null;
+  last_seen_at: string | null;
 };
 
 type VehicleOption = {
@@ -94,17 +102,13 @@ export function DriversPage() {
   };
 
   async function fetchDrivers() {
-    const { data, error: driversError } = await supabase
-      .from('drivers_with_current_vehicle')
-      .select('*')
-      .order('full_name');
-
-    if (driversError) {
+    try {
+      const data = await listDrivers();
+      return data as DriverRow[];
+    } catch (driversError) {
       console.error('fetchDrivers error:', driversError);
       return [];
     }
-
-    return data ?? [];
   }
 
   async function fetchVehicles() {
@@ -139,6 +143,15 @@ export function DriversPage() {
     if (!selectedDriver) return;
 
     try {
+      const selectedDriverId = resolveDriverId(selectedDriver);
+      if (selectedVehicleId) {
+        const occupancy = vehicleOccupancy.get(String(selectedVehicleId));
+        if (occupancy && occupancy.driverId !== selectedDriverId) {
+          alert(`Vehicle is already assigned to ${occupancy.label}. Unassign it first.`);
+          return;
+        }
+      }
+
       if (!selectedVehicleId) {
         try {
           await unassignDriverFromAllVehicles(selectedDriver.driver_id);
@@ -184,7 +197,7 @@ export function DriversPage() {
         fetchVehicles(),
         supabase
           .from('view_driver_current_status')
-          .select('driver_id, status, shift_id'),
+          .select('driver_id, status, shift_id, last_location_at, lat, lng, speed_kmh, heading, vehicle_id, last_seen_at'),
         supabase
           .from('shifts')
           .select('id, driver_id, vehicle_id, started_at, ended_at, status')
@@ -201,17 +214,17 @@ export function DriversPage() {
       statusRows.forEach((row) => {
         nextStatusMap[row.driver_id] = {
           driver_id: row.driver_id,
-          last_seen_at: null,
-          is_online: false,
+          last_seen_at: row.last_seen_at ?? null,
+          is_online: isOnlineFromLastSeen(row.last_seen_at ?? null),
           status_state: row.status ?? null,
           on_break: null,
           status_started_at: null,
-          last_location_at: null,
-          lat: null,
-          lng: null,
-          speed_kmh: null,
-          heading: null,
-          vehicle_id: null,
+          last_location_at: row.last_location_at ?? null,
+          lat: row.lat ?? null,
+          lng: row.lng ?? null,
+          speed_kmh: row.speed_kmh ?? null,
+          heading: row.heading ?? null,
+          vehicle_id: row.vehicle_id ?? null,
           shift_id: row.shift_id ?? null,
         };
       });
@@ -294,7 +307,33 @@ export function DriversPage() {
     });
   }, [filteredDrivers, resolveDriverId, activeShiftMap]);
 
-  // Add driver via Supabase Auth (creates profile automatically)
+  const vehicleOccupancy = useMemo(() => {
+    const occupancy = new Map<string, { driverId: string; label: string }>();
+    drivers.forEach((driver) => {
+      const vehicleId = driver.current_vehicle_id;
+      const driverId = resolveDriverId(driver);
+      if (!vehicleId || !driverId) return;
+
+      occupancy.set(String(vehicleId), {
+        driverId,
+        label: driver.full_name ?? driver.profile_email ?? driver.email ?? driverId,
+      });
+    });
+    return occupancy;
+  }, [drivers]);
+
+  const parseCreateDriverError = (rawBody: string, status: number) => {
+    if (!rawBody) return `Create driver failed (${status})`;
+
+    try {
+      const parsed = JSON.parse(rawBody) as { error?: string; message?: string; detail?: string };
+      return parsed.error || parsed.message || parsed.detail || `Create driver failed (${status})`;
+    } catch {
+      return rawBody;
+    }
+  };
+
+  // Add driver via admin API (requires server-side service role privileges)
   const handleAddDriver = async () => {
     if (!formData.name || !formData.email || !formData.password) {
       setError('Name, email, and password are required');
@@ -306,52 +345,99 @@ export function DriversPage() {
       return;
     }
     try {
+      setError(null);
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) {
         setError('Not authenticated. Please log in again.');
         return;
       }
-      console.info('DriversPage: POST /api/admin/create-driver email=', formData.email);
-      const response = await fetch('/api/admin/create-driver', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ email: formData.email, password: formData.password, full_name: formData.name || formData.email.split('@')[0], phone: formData.phone }),
-      });
-      if (!response.ok) {
-        const errBody = await response.json().catch(() => ({}));
-        console.warn('DriversPage: /api/admin/create-driver error=', errBody);
-        setError(errBody?.error || 'Failed to create driver');
+
+      const endpoints = ['/api/admin/create-driver', '/admin/create-driver'];
+      const payload = {
+        email: formData.email,
+        password: formData.password,
+        full_name: formData.name || formData.email.split('@')[0],
+        name: formData.name || formData.email.split('@')[0],
+        phone: formData.phone,
+      };
+
+      let created = false;
+      let lastErrorMessage = 'Failed to create driver';
+      let sawNotFound = false;
+      let createdResponse: { user_id?: string; driver?: { user_id?: string; full_name?: string | null } } | null = null;
+
+      for (const endpoint of endpoints) {
+        console.info('DriversPage: POST create-driver', { endpoint, email: formData.email });
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (response.ok) {
+          createdResponse = await response.json().catch(() => null);
+          created = true;
+          break;
+        }
+
+        const responseBody = await response.text().catch(() => '');
+        console.warn('DriversPage: create-driver non-OK response', {
+          endpoint,
+          status: response.status,
+          body: responseBody,
+        });
+
+        if (response.status === 404) {
+          sawNotFound = true;
+          continue;
+        }
+
+        lastErrorMessage = parseCreateDriverError(responseBody, response.status);
+        break;
+      }
+
+      if (!created) {
+        if (sawNotFound) {
+          setError('Driver creation API is not configured in this environment. Start the root dev server with "npm run dev" or configure an admin API endpoint.');
+          return;
+        }
+
+        setError(lastErrorMessage);
         return;
       }
+
       // Refetch drivers list from drivers_full
       const previousTotal = totalCount;
       const refreshedDrivers = await fetchDrivers();
-      const normalizedEmail = formData.email.toLowerCase();
-      const createdDriver = refreshedDrivers.find((driver: DriverRow) =>
-        (driver.profile_email ?? driver.email ?? '').toLowerCase() === normalizedEmail
-      );
+      const createdUserId = createdResponse?.driver?.user_id ?? createdResponse?.user_id ?? null;
+      const normalizedName = (formData.name || formData.email.split('@')[0]).trim().toLowerCase();
+      const createdDriver = refreshedDrivers.find((driver: DriverRow) => {
+        if (createdUserId && driver.auth_user_id === createdUserId) {
+          return true;
+        }
+
+        return (driver.full_name ?? '').trim().toLowerCase() === normalizedName;
+      });
       setDrivers(refreshedDrivers as DriverRow[]);
       setTotalCount(refreshedDrivers.length);
       setActiveCount(countDriversByStatus(refreshedDrivers as DriverRow[], 'active'));
-      if (!createdDriver || refreshedDrivers.length <= previousTotal) {
+      if (!createdDriver && refreshedDrivers.length <= previousTotal) {
         const debugDetails = {
-          expectedEmail: formData.email,
+          expectedName: formData.name,
+          createdUserId,
           listLength: refreshedDrivers.length,
           totalCount: refreshedDrivers.length,
           previousTotal,
         };
-        console.error('DriversPage: verification failed after create', debugDetails);
-        setError(`Verification failed after create. Details: ${JSON.stringify(debugDetails)}`);
+        console.warn('DriversPage: created driver not yet visible after refresh', debugDetails);
       }
       setDialogOpen(false);
       setFormData({ name: '', email: '', password: '', phone: '' });
-      if (createdDriver) {
-        setError(null);
-      }
+      setError(null);
     } catch (err) {
       setError('Failed to create driver');
       console.error(err);
@@ -367,32 +453,60 @@ export function DriversPage() {
     if (!driverToDelete) return;
 
     try {
-      // 1. Close active vehicle assignment via canonical RPC
-      await unassignDriverFromAllVehicles(driverToDelete.driver_id);
+      setError(null);
 
-      // 2. Delete driver-related activity (optional but safe)
-      await supabase
-        .from('driver_presence')
-        .delete()
-        .eq('driver_id', driverToDelete.driver_id);
-
-      // 3. Delete driver row
-      const { error: driverError } = await supabase
-        .from('drivers')
-        .delete()
-        .eq('id', driverToDelete.driver_id);
-
-      if (driverError) {
-        console.error('Delete driver error:', driverError);
-        alert('Failed to delete driver');
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        setError('Admin session expired. Please log in again.');
         return;
       }
 
-      // 4. Delete profile (optional but recommended)
-      await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', driverToDelete.auth_user_id);
+      const endpoints = ['/api/admin/delete-driver', '/admin/delete-driver'];
+      let deleted = false;
+      let lastErrorMessage = 'Failed to delete driver';
+      let sawNotFound = false;
+
+      for (const endpoint of endpoints) {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ driver_id: driverToDelete.driver_id }),
+        });
+
+        if (response.ok) {
+          deleted = true;
+          break;
+        }
+
+        const responseBody = await response.text().catch(() => '');
+        console.warn('DriversPage: delete-driver non-OK response', {
+          endpoint,
+          status: response.status,
+          body: responseBody,
+        });
+
+        if (response.status === 404) {
+          sawNotFound = true;
+          continue;
+        }
+
+        lastErrorMessage = parseCreateDriverError(responseBody, response.status);
+        break;
+      }
+
+      if (!deleted) {
+        if (sawNotFound) {
+          setError('Driver delete API is not configured in this environment. Start the root dev server with "npm run dev" or configure an admin API endpoint.');
+          return;
+        }
+
+        setError(lastErrorMessage);
+        return;
+      }
 
       // 5. Refresh UI
       const refreshedDrivers = await fetchDrivers();
@@ -401,6 +515,7 @@ export function DriversPage() {
       setActiveCount(countDriversByStatus(refreshedDrivers as DriverRow[], 'active'));
       setDeleteDialog(false);
       setDriverToDelete(null);
+      setError(null);
       alert('Driver deleted successfully');
     } catch (err) {
       console.error('Delete unexpected error:', err);
@@ -514,14 +629,13 @@ export function DriversPage() {
                     <TableHead className="text-gray-400">Break</TableHead>
                     <TableHead className="text-gray-400">Current Vehicle</TableHead>
                     <TableHead className="text-gray-400">Current Shift</TableHead>
-                    <TableHead className="text-gray-400">Last Location</TableHead>
                     <TableHead className="text-gray-400 text-right">View Profile</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sortedDrivers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                         No drivers found
                       </TableCell>
                     </TableRow>
@@ -568,11 +682,6 @@ export function DriversPage() {
                               ) : (
                                 <Badge className="bg-gray-900 text-gray-300 border-gray-700">Off Shift</Badge>
                               )}
-                            </TableCell>
-                            <TableCell className="text-gray-300">
-                              {status?.last_location_at
-                                ? formatDistanceToNow(new Date(status.last_location_at), { addSuffix: true })
-                                : 'No GPS'}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center justify-end gap-2">
@@ -642,11 +751,23 @@ export function DriversPage() {
                                 className="w-full bg-[#0F0F0F] border border-gray-700 text-white p-2 rounded"
                               >
                                 <option value="">None</option>
-                                {vehicles.map((vehicle) => (
-                                  <option key={vehicle.id} value={String(vehicle.id)}>
-                                    {vehicle.rego}
-                                  </option>
-                                ))}
+                                {vehicles.map((vehicle) => {
+                                  const occupancy = vehicleOccupancy.get(String(vehicle.id));
+                                  const selectedDriverId = selectedDriver ? resolveDriverId(selectedDriver) : null;
+                                  const occupiedByOtherDriver = Boolean(occupancy && occupancy.driverId !== selectedDriverId);
+
+                                  return (
+                                    <option
+                                      key={vehicle.id}
+                                      value={String(vehicle.id)}
+                                      disabled={occupiedByOtherDriver}
+                                    >
+                                      {occupiedByOtherDriver
+                                        ? `${vehicle.rego} (Assigned to ${occupancy?.label})`
+                                        : vehicle.rego}
+                                    </option>
+                                  );
+                                })}
                               </select>
                             </div>
                             <Button

@@ -1,23 +1,33 @@
 // Main dashboard layout with sidebar and header
 import React, { useState } from 'react';
-import { Outlet, Link, useLocation } from 'react-router';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
-import { Input } from '@/app/components/ui/input';
+import { GlobalSearch } from '@/components/GlobalSearch';
+import { Card, CardContent } from '@/app/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
+import { formatPerthDateTime } from '@/lib/dateTime';
+import { InboxProvider, useInbox } from '@/contexts/InboxContext';
 import {
   LayoutDashboard,
   Users,
   Truck,
   MapPin,
   Calendar,
+  Droplets,
   Wrench,
   FileText,
   Camera,
   Settings,
   LogOut,
-  Search,
   RefreshCw,
+  Bell,
+  Inbox,
+  Check,
+  CheckCircle2,
+  ExternalLink,
+  Loader,
   Menu,
   X,
 } from 'lucide-react';
@@ -28,23 +38,145 @@ const navigation = [
   { name: 'Vehicles', href: '/vehicles', icon: Truck },
   { name: 'Live Map', href: '/live-map', icon: MapPin },
   { name: 'Odometer', href: '/odometer', icon: Camera },
+  { name: 'Fuel Logs', href: '/fuel-logs', icon: Droplets },
   { name: 'Shifts', href: '/shifts', icon: Calendar },
   { name: 'Maintenance', href: '/maintenance', icon: Wrench },
   { name: 'Logs', href: '/logs', icon: FileText },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
+function InboxDialogButton() {
+  const { notifications, loading, busyId, unreadCount, refresh, acknowledge, complete } = useInbox();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        className="relative border-gray-700 bg-[#0F0F0F] text-gray-200 hover:bg-[#1C1C1C] hover:text-white"
+        onClick={() => setOpen(true)}
+      >
+        <Bell className="w-4 h-4 mr-2" />
+        Inbox
+        {unreadCount > 0 && (
+          <span className="ml-2 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-semibold text-white">
+            {unreadCount}
+          </span>
+        )}
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-4xl border-gray-800 bg-[#161616] text-gray-100">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <Inbox className="w-5 h-5" />
+              Notification Centre
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Service alerts and maintenance notifications.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-gray-300 hover:text-white"
+              onClick={refresh}
+              disabled={loading}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+
+          <div className="max-h-[65vh] overflow-y-auto pr-1 space-y-3">
+            {loading ? (
+              <div className="flex items-center justify-center py-8 text-gray-400">
+                <Loader className="w-5 h-5 animate-spin mr-2" />
+                Loading notifications...
+              </div>
+            ) : unreadCount === 0 ? (
+              <div className="rounded-lg border border-gray-800 bg-[#0F0F0F] p-4 text-sm text-gray-400">
+                No unacknowledged service alerts.
+              </div>
+            ) : (
+              notifications.map((notification) => {
+                const busy = busyId === notification.maintenance_item_id;
+                return (
+                  <Card key={notification.maintenance_item_id} className="border-gray-800 bg-[#0F0F0F]">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-yellow-300">Service due soon</p>
+                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                        <p className="text-gray-300">Vehicle rego: <span className="text-white">{notification.vehicle_rego ?? notification.vehicle_id ?? 'Unknown'}</span></p>
+                        <p className="text-gray-300">Current km: <span className="text-white">{notification.current_km != null ? `${Math.round(notification.current_km).toLocaleString()} km` : '—'}</span></p>
+                        <p className="text-gray-300">Target service km: <span className="text-white">{notification.target_service_km != null ? `${Math.round(notification.target_service_km).toLocaleString()} km` : '—'}</span></p>
+                        <p className="text-gray-300">KM remaining: <span className="text-white">{notification.km_remaining != null ? `${Math.round(notification.km_remaining).toLocaleString()} km` : '—'}</span></p>
+                        <p className="text-gray-300 sm:col-span-2">Created: <span className="text-white">{formatPerthDateTime(notification.created_at)}</span></p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          className="bg-[#FF6B35] text-white hover:bg-[#E55A2B]"
+                          disabled={busy}
+                          onClick={() => acknowledge(notification.maintenance_item_id)}
+                        >
+                          <Check className="w-4 h-4 mr-1" />
+                          Acknowledge
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="bg-green-600 text-white hover:bg-green-500"
+                          disabled={busy}
+                          onClick={() => complete(notification.maintenance_item_id)}
+                        >
+                          <CheckCircle2 className="w-4 h-4 mr-1" />
+                          Mark completed
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-gray-300 hover:text-white"
+                          onClick={() => { setOpen(false); navigate('/maintenance'); }}
+                        >
+                          <ExternalLink className="w-4 h-4 mr-1" />
+                          Go to Maintenance
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export function DashboardLayout() {
   const { user, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onlineDrivers] = useState(12); // Mock data - replace with real data
 
   const handleLogout = async () => {
     await signOut();
+    setSidebarOpen(false);
+    navigate('/login', { replace: true });
   };
 
   return (
+    <InboxProvider>
     <div className="min-h-screen bg-[#0F0F0F]">
       {/* Sidebar for desktop */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
@@ -176,14 +308,11 @@ export function DashboardLayout() {
                 <Menu className="w-5 h-5" />
               </Button>
 
-              <div className="relative hidden sm:block">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <Input
-                  type="search"
-                  placeholder="Search..."
-                  className="w-64 pl-10 bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
-                />
+              <div className="hidden sm:block">
+                <GlobalSearch />
               </div>
+
+              <InboxDialogButton />
             </div>
 
             <div className="flex items-center gap-4">
@@ -219,5 +348,6 @@ export function DashboardLayout() {
         </main>
       </div>
     </div>
+    </InboxProvider>
   );
 }

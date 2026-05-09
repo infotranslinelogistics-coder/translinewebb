@@ -1,7 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+function getMissingEnvVars() {
+  const missing = [];
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl) missing.push('SUPABASE_URL');
+  if (!serviceRoleKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+  return missing;
+}
 
 export async function createDriver(req, res) {
   // Extract the Bearer token from the Authorization header
@@ -11,13 +17,17 @@ export async function createDriver(req, res) {
     return res.status(401).json({ error: 'Missing authorization token' });
   }
 
-  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-    console.error('createDriver: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars');
-    return res.status(500).json({ error: 'Server configuration error' });
+  const missingEnvVars = getMissingEnvVars();
+  if (missingEnvVars.length > 0) {
+    console.error('createDriver: missing required env vars:', missingEnvVars.join(', '));
+    return res.status(500).json({ error: `Missing ${missingEnvVars.join(', ')}` });
   }
 
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
   // Create a Supabase client with the service role key to verify the requester's JWT and perform admin operations
-  const serviceRoleClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+  const serviceRoleClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
@@ -42,42 +52,86 @@ export async function createDriver(req, res) {
   }
 
   // Validate request body
-  const { email, password, name, phone } = req.body || {};
-  if (!email || !password || !name) {
+  const { email, password, full_name, name } = req.body || {};
+  const providedName = typeof full_name === 'string' && full_name.trim().length > 0
+    ? full_name.trim()
+    : typeof name === 'string' && name.trim().length > 0
+      ? name.trim()
+      : null;
+  if (!email || !password || !providedName) {
     return res.status(400).json({ error: 'email, password, and name are required' });
   }
 
-  // Create the new user in Supabase Auth using service role
-  const { data: newUser, error: createError } = await serviceRoleClient.auth.admin.createUser({
-    email,
-    password,
-    user_metadata: { full_name: name, phone: phone || '', status: 'active' },
-    email_confirm: true,
-  });
-  if (createError || !newUser?.user) {
-    console.error('createDriver: auth.admin.createUser error=', createError);
-    return res.status(400).json({ error: createError?.message || 'Failed to create auth user' });
-  }
-  const newUserId = newUser.user.id;
+  let authUserId = null;
+  let createdAuthUserInThisRequest = false;
 
-  // Insert a corresponding record in the drivers table linked by user_id
+  const { data: existingUsersData, error: existingUsersError } = await serviceRoleClient.auth.admin.listUsers();
+  if (existingUsersError) {
+    console.error('createDriver: auth.admin.listUsers error=', existingUsersError);
+    return res.status(500).json({ error: existingUsersError.message || 'Failed to check existing users' });
+  }
+
+  const existingUser = (existingUsersData?.users ?? []).find(
+    (user) => (user.email ?? '').toLowerCase() === email.toLowerCase()
+  );
+
+  if (existingUser) {
+    authUserId = existingUser.id;
+  } else {
+    // Create the new user in Supabase Auth using service role
+    const { data: newUser, error: createError } = await serviceRoleClient.auth.admin.createUser({
+      email,
+      password,
+      user_metadata: { full_name: providedName, status: 'active' },
+      email_confirm: true,
+    });
+    if (createError || !newUser?.user) {
+      console.error('createDriver: auth.admin.createUser error=', createError);
+      return res.status(400).json({ error: createError?.message || 'Failed to create auth user' });
+    }
+
+    authUserId = newUser.user.id;
+    createdAuthUserInThisRequest = true;
+  }
+
+  if (!authUserId) {
+    return res.status(500).json({ error: 'Failed to resolve auth user id' });
+  }
+
+  const { error: profileUpsertError } = await serviceRoleClient
+    .from('profiles')
+    .upsert({
+      id: authUserId,
+      full_name: providedName,
+      role: 'driver',
+    });
+
+  if (profileUpsertError) {
+    if (createdAuthUserInThisRequest) {
+      await serviceRoleClient.auth.admin.deleteUser(authUserId);
+    }
+    console.error('createDriver: profiles upsert error=', profileUpsertError);
+    return res.status(500).json({ error: profileUpsertError.message || 'Failed to upsert profile' });
+  }
+
+  // Ensure a corresponding record exists in drivers table linked by user_id
   const { data: driverRecord, error: insertError } = await serviceRoleClient
     .from('drivers')
-    .insert([
-      {
-        user_id: newUserId,
-        name,
-        email,
-        phone: phone || '',
-        status: 'active',
-      },
-    ])
+    .upsert({
+      user_id: authUserId,
+      full_name: providedName,
+      status: 'active',
+    }, {
+      onConflict: 'user_id',
+    })
     .select()
     .single();
   if (insertError) {
     console.error('createDriver: drivers insert error=', insertError);
     // Attempt to clean up the created auth user to avoid orphaned accounts
-    await serviceRoleClient.auth.admin.deleteUser(newUserId);
+    if (createdAuthUserInThisRequest) {
+      await serviceRoleClient.auth.admin.deleteUser(authUserId);
+    }
     return res.status(500).json({ error: insertError.message || 'Failed to insert driver record' });
   }
 
@@ -86,10 +140,11 @@ export async function createDriver(req, res) {
     admin_id: requesterId,
     action: 'create_driver',
     target_type: 'driver',
-    target_id: newUserId,
+    target_id: authUserId,
     metadata: {
       email,
-      full_name: name,
+      full_name: providedName,
+      created_auth_user: createdAuthUserInThisRequest,
     },
   }).then(({ error: auditError }) => {
     if (auditError) console.warn('createDriver: audit log insert failed=', auditError);

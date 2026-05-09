@@ -5,9 +5,28 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import http from 'http';
 import { createDriver } from './server/admin/createDriver.js';
+import { deleteDriver } from './server/admin/deleteDriver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  const content = fs.readFileSync(filePath, 'utf-8');
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const separatorIndex = trimmed.indexOf('=');
+    if (separatorIndex <= 0) continue;
+    const key = trimmed.slice(0, separatorIndex).trim();
+    const rawValue = trimmed.slice(separatorIndex + 1).trim();
+    if (!key || process.env[key]) continue;
+    process.env[key] = rawValue.replace(/^['"]|['"]$/g, '');
+  }
+}
+
+loadEnvFile(path.resolve(__dirname, '.env.local'));
+loadEnvFile(path.resolve(__dirname, '.env'));
 
 const PORT = 5173;
 
@@ -20,6 +39,8 @@ async function setupDevServer() {
   // Admin API routes used by portal pages in dev.
   app.post('/api/admin/create-driver', createDriver);
   app.post('/admin/create-driver', createDriver);
+  app.post('/api/admin/delete-driver', deleteDriver);
+  app.post('/admin/delete-driver', deleteDriver);
 
   let viteMain, vitePortal;
 

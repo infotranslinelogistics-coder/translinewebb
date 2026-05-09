@@ -1,5 +1,6 @@
 // Shifts management page
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
@@ -8,9 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/app/components/ui/alert-dialog';
 import { Search, Clock, Loader } from 'lucide-react';
-import { format } from 'date-fns';
 import { listShifts, Shift, countActiveShifts, countTodayShifts } from '@/lib/db/shifts';
 import { supabase } from '@/lib/supabase';
+import { formatPerthDateTime, PERTH_TIME_LABEL } from '@/lib/dateTime';
 
 const formatChecklistLabel = (key: string) =>
   key
@@ -52,6 +53,9 @@ type ChecklistSummary = {
   pass: number;
   fail: number;
   pending: number;
+  submittedAt: string | null;
+  answerCount: number;
+  hasFailures: boolean | null;
 };
 
 type BreakSummary = {
@@ -69,9 +73,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const formatTimestamp = (value?: string | null) => {
   if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return format(date, 'MMM dd, yyyy HH:mm:ss');
+  return formatPerthDateTime(value);
 };
 
 const formatDurationSeconds = (seconds: number) => {
@@ -152,11 +154,43 @@ const normalizeChecklist = (checklist: Shift['checklist'] | null | undefined): C
   return Object.entries(checklist).map(([key, value]) => getChecklistItem(key, value));
 };
 
+const CHECKLIST_EVENT_TYPES = ['checklist_submitted', 'checklist_completed', 'shift_checklist_submitted'];
+
+const getChecklistAnswersFromMetadata = (metadata: Record<string, unknown> | null | undefined): Record<string, unknown> | null => {
+  if (!metadata) return null;
+
+  const directAnswers = metadata.answers;
+  if (isRecord(directAnswers)) return directAnswers;
+
+  const directChecklist = metadata.checklist;
+  if (isRecord(directChecklist)) return directChecklist;
+
+  return null;
+};
+
+const getLatestChecklistEvent = (events: ShiftEvent[]): ShiftEvent | null => {
+  const checklistEvents = events.filter((event) => CHECKLIST_EVENT_TYPES.includes(event.event_type));
+  if (checklistEvents.length === 0) return null;
+
+  return checklistEvents.reduce<ShiftEvent | null>((latest, event) => {
+    if (!latest) return event;
+    return new Date(event.created_at).getTime() >= new Date(latest.created_at).getTime() ? event : latest;
+  }, null);
+};
+
 const getChecklistSummary = (items: ChecklistDisplayItem[] | null | undefined): ChecklistSummary => {
   const safeItems = Array.isArray(items) ? items : [];
 
   if (safeItems.length === 0) {
-    return { total: 0, pass: 0, fail: 0, pending: 0 };
+    return {
+      total: 0,
+      pass: 0,
+      fail: 0,
+      pending: 0,
+      submittedAt: null,
+      answerCount: 0,
+      hasFailures: null,
+    };
   }
 
   let pass = 0;
@@ -173,6 +207,9 @@ const getChecklistSummary = (items: ChecklistDisplayItem[] | null | undefined): 
     pass,
     fail,
     pending,
+    submittedAt: null,
+    answerCount: safeItems.length,
+    hasFailures: fail > 0,
   };
 };
 
@@ -314,6 +351,7 @@ const getBreakSummary = (events: ShiftEvent[]): BreakSummary => {
 };
 
 export function ShiftsPage() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
@@ -324,6 +362,8 @@ export function ShiftsPage() {
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
   const [endShiftDialog, setEndShiftDialog] = useState(false);
   const [endShiftReason, setEndShiftReason] = useState('');
+  const [deleteShiftTarget, setDeleteShiftTarget] = useState<Shift | null>(null);
+  const [deletingShiftId, setDeletingShiftId] = useState<string | null>(null);
   const [detailShift, setDetailShift] = useState<Shift | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -398,31 +438,83 @@ export function ShiftsPage() {
 
   const handleEndShift = async () => {
     if (!selectedShift) return;
+    const shiftId = selectedShift.id;
+
     try {
-      const { error } = await supabase.rpc('force_end_shift', {
-        p_shift_id: selectedShift.id,
-        p_reason: endShiftReason || 'Ended by admin',
+      const { data, error } = await supabase.rpc('force_end_shift', {
+        p_shift_id: shiftId,
+        p_reason: 'Force ended by admin',
       });
-      if (error) throw error;
-      setShifts(shifts.map((s) =>
-        s.id === selectedShift.id
-          ? { ...s, status: 'ended', ended_at: new Date().toISOString() }
-          : s
-      ));
-      setActiveCount(Math.max(0, activeCount - 1));
+      if (error) {
+        console.error('force_end_shift RPC error', {
+          shiftId,
+          params: {
+            p_shift_id: shiftId,
+            p_reason: 'Force ended by admin',
+          },
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+        throw error;
+      }
+
+      console.info('force_end_shift RPC success', {
+        shiftId,
+        result: data,
+      });
+
+      await fetchShifts();
       setEndShiftDialog(false);
       setSelectedShift(null);
       setEndShiftReason('');
       setError(null);
     } catch (err) {
       setError('Failed to end shift');
-      console.error(err);
+      console.error('handleEndShift failed', {
+        shiftId,
+        error: err,
+      });
     }
   };
 
   const handleEndShiftDialogChange = (open: boolean) => {
     setEndShiftDialog(open);
     if (!open) setEndShiftReason('');
+  };
+
+  const handleDeleteShift = async () => {
+    if (!deleteShiftTarget) return;
+
+    const shiftId = deleteShiftTarget.id;
+    setDeletingShiftId(shiftId);
+
+    try {
+      const { error: deleteError } = await supabase.rpc('delete_shift_admin', {
+        p_shift_id: shiftId,
+      });
+
+      if (deleteError) {
+        console.error('delete_shift_admin RPC error', {
+          shiftId,
+          code: deleteError.code,
+          message: deleteError.message,
+          details: deleteError.details,
+          hint: deleteError.hint,
+        });
+        throw deleteError;
+      }
+
+      await fetchShifts();
+      setDeleteShiftTarget(null);
+      setError(null);
+    } catch (err) {
+      console.error('handleDeleteShift failed', { shiftId, error: err });
+      setError('Failed to delete shift');
+    } finally {
+      setDeletingShiftId(null);
+    }
   };
 
   const loadShiftDetails = useCallback(async (shift: Shift) => {
@@ -458,8 +550,16 @@ export function ShiftsPage() {
     }
   };
 
-  const checklistItems = normalizeChecklist(detailShift?.checklist ?? null);
-  const checklistSummary = getChecklistSummary(checklistItems);
+  const latestChecklistEvent = getLatestChecklistEvent(shiftEvents);
+  const checklistItems = normalizeChecklist(
+    getChecklistAnswersFromMetadata(isRecord(latestChecklistEvent?.metadata) ? latestChecklistEvent.metadata : null) as Shift['checklist']
+  );
+  const checklistSummary = {
+    ...getChecklistSummary(checklistItems),
+    submittedAt: latestChecklistEvent?.created_at ?? null,
+    answerCount: checklistItems.length,
+    hasFailures: checklistItems.length > 0 ? checklistItems.some((item) => item.status === 'fail') : null,
+  };
   const timelineItems = detailShift ? buildTimeline(detailShift, shiftEvents) : [];
   const breakSummary = getBreakSummary(shiftEvents);
   const locationItems = shiftEvents
@@ -477,7 +577,7 @@ export function ShiftsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Shifts</h1>
-          <p className="text-gray-400">Track driver shifts and checklists</p>
+          <p className="text-gray-400">Track driver shifts and checklists. All times shown in {PERTH_TIME_LABEL}.</p>
         </div>
       </div>
 
@@ -582,14 +682,12 @@ export function ShiftsPage() {
                           <TableCell className="text-gray-300">
                             <div className="flex items-center gap-2">
                               <Clock className="w-4 h-4 text-gray-500" />
-                              {shift.started_at
-                                ? format(new Date(shift.started_at), 'MMM dd, HH:mm')
-                                : '—'}
+                              {formatPerthDateTime(shift.started_at)}
                             </div>
                           </TableCell>
                           <TableCell className="text-gray-300">
                             {shift.ended_at
-                              ? format(new Date(shift.ended_at), 'MMM dd, HH:mm')
+                              ? formatPerthDateTime(shift.ended_at)
                               : <span className="text-yellow-400">In progress</span>}
                           </TableCell>
                           <TableCell>
@@ -637,10 +735,19 @@ export function ShiftsPage() {
                                 size="sm"
                                 className="text-gray-400 hover:text-blue-400 h-8 px-2 text-xs"
                                 onClick={() => {
-                                  loadShiftDetails(shift);
+                                  navigate(`/shifts/${shift.id}`);
                                 }}
                               >
                                 View Details
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-gray-400 hover:text-red-400 h-8 px-2 text-xs"
+                                disabled={deletingShiftId === shift.id}
+                                onClick={() => setDeleteShiftTarget(shift)}
+                              >
+                                {deletingShiftId === shift.id ? 'Deleting...' : 'Delete Shift'}
                               </Button>
                               {shift.status === 'active' && (
                                 <Button
@@ -693,6 +800,29 @@ export function ShiftsPage() {
               className="bg-red-600 text-white hover:bg-red-700"
             >
               End Shift
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={Boolean(deleteShiftTarget)} onOpenChange={(open) => !open && setDeleteShiftTarget(null)}>
+        <AlertDialogContent className="bg-[#161616] border-gray-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Delete Shift</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              This deletes the shift and all related events. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex gap-4">
+            <AlertDialogCancel className="bg-gray-800 text-gray-300 hover:bg-gray-700" disabled={Boolean(deletingShiftId)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteShift}
+              className="bg-red-600 text-white hover:bg-red-700"
+              disabled={Boolean(deletingShiftId)}
+            >
+              {deletingShiftId ? 'Deleting...' : 'Delete Shift'}
             </AlertDialogAction>
           </div>
         </AlertDialogContent>
@@ -801,35 +931,66 @@ export function ShiftsPage() {
               </CardHeader>
 
               <CardContent className="space-y-3 text-sm">
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-gray-300">Total: {checklistSummary.total}</div>
-                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-green-400">Passed: {checklistSummary.pass}</div>
-                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-red-400">Failed: {checklistSummary.fail}</div>
-                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-yellow-400">Pending: {checklistSummary.pending}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-gray-300">
+                    Submitted At: {checklistSummary.submittedAt ? formatTimestamp(checklistSummary.submittedAt) : 'Pending'}
+                  </div>
+                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-gray-300">
+                    Answers: {checklistSummary.answerCount > 0 ? checklistSummary.answerCount : 'Pending'}
+                  </div>
+                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-gray-300">
+                    Has Failures:{' '}
+                    <span
+                      className={
+                        checklistSummary.hasFailures == null
+                          ? 'text-yellow-400'
+                          : checklistSummary.hasFailures
+                            ? 'text-red-400'
+                            : 'text-green-400'
+                      }
+                    >
+                      {checklistSummary.hasFailures == null ? 'Pending' : checklistSummary.hasFailures ? 'Fail' : 'Pass'}
+                    </span>
+                  </div>
+                  <div className="bg-[#121212] rounded-lg px-2 py-2 text-gray-300">
+                    Total Answers: {checklistSummary.total}
+                  </div>
                 </div>
 
                 <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
-                  {checklistItems.map((item) => (
-                    <div
-                      key={`detail-${detailShift.id}-${item.key}`}
-                      className="rounded-lg border border-gray-800 bg-[#121212] px-3 py-2 text-xs"
-                    >
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">{item.label}</span>
-                        <span
-                          className={
-                            item.status === "fail"
-                              ? "text-red-400"
-                              : item.status === "pass"
-                              ? "text-green-400"
-                              : "text-yellow-400"
-                          }
-                        >
-                          {item.statusLabel}
-                        </span>
-                      </div>
+                  {checklistItems.length === 0 ? (
+                    <div className="rounded-lg border border-gray-800 bg-[#121212] px-3 py-2 text-xs text-gray-500">
+                      No checklist submission event found
                     </div>
-                  ))}
+                  ) : (
+                    checklistItems.map((item) => (
+                      <div
+                        key={`detail-${detailShift.id}-${item.key}`}
+                        className="rounded-lg border border-gray-800 bg-[#121212] px-3 py-2 text-xs"
+                      >
+                        <div className="flex justify-between gap-3">
+                          <span className="text-gray-300">{item.label}</span>
+                          <span
+                            className={
+                              item.status === "fail"
+                                ? "text-red-400"
+                                : item.status === "pass"
+                                ? "text-green-400"
+                                : "text-yellow-400"
+                            }
+                          >
+                            {item.statusLabel}
+                          </span>
+                        </div>
+                        {item.valueLabel && (
+                          <p className="mt-1 text-[11px] text-gray-400">{item.valueLabel}</p>
+                        )}
+                        {item.notes && (
+                          <p className="mt-1 text-[11px] text-gray-500">{item.notes}</p>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>

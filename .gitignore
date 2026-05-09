@@ -3,3 +3,5 @@ dist/
 dist-portal/
 .DS_Store
 *.zip
+.env.local
+portal/.env.local
