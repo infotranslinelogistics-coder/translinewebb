@@ -1,10 +1,19 @@
 // Main dashboard layout with sidebar and header
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { GlobalSearch } from '@/components/GlobalSearch';
+import { Card, CardContent } from '@/app/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
+import { formatPerthDateTime } from '@/lib/dateTime';
+import {
+  acknowledgeMaintenanceItem,
+  listAdminInboxNotifications,
+  markMaintenanceItemCompleted,
+  type AdminInboxNotification,
+} from '@/lib/db/maintenance';
 import {
   LayoutDashboard,
   Users,
@@ -18,6 +27,12 @@ import {
   Settings,
   LogOut,
   RefreshCw,
+  Bell,
+  Inbox,
+  Check,
+  CheckCircle2,
+  ExternalLink,
+  Loader,
   Menu,
   X,
 } from 'lucide-react';
@@ -41,11 +56,68 @@ export function DashboardLayout() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onlineDrivers] = useState(12); // Mock data - replace with real data
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [inboxNotifications, setInboxNotifications] = useState<AdminInboxNotification[]>([]);
+  const [inboxBusyId, setInboxBusyId] = useState<string | null>(null);
+
+  const unreadInboxCount = useMemo(() => inboxNotifications.length, [inboxNotifications]);
+
+  const loadInboxNotifications = useCallback(async () => {
+    try {
+      setInboxLoading(true);
+      const rows = await listAdminInboxNotifications();
+      setInboxNotifications(rows);
+    } catch (error) {
+      console.error('Failed to load admin inbox notifications:', error);
+    } finally {
+      setInboxLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadInboxNotifications();
+    const interval = setInterval(loadInboxNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [loadInboxNotifications]);
 
   const handleLogout = async () => {
     await signOut();
     setSidebarOpen(false);
     navigate('/login', { replace: true });
+  };
+
+  const handleAcknowledgeInbox = async (maintenanceItemId: string) => {
+    try {
+      setInboxBusyId(maintenanceItemId);
+      await acknowledgeMaintenanceItem(maintenanceItemId);
+      setInboxNotifications((prev) =>
+        prev.filter((notification) => notification.maintenance_item_id !== maintenanceItemId),
+      );
+    } catch (error) {
+      console.error('Failed to acknowledge maintenance notification:', error);
+    } finally {
+      setInboxBusyId(null);
+    }
+  };
+
+  const handleCompleteInbox = async (maintenanceItemId: string) => {
+    try {
+      setInboxBusyId(maintenanceItemId);
+      await markMaintenanceItemCompleted(maintenanceItemId);
+      setInboxNotifications((prev) =>
+        prev.filter((notification) => notification.maintenance_item_id !== maintenanceItemId),
+      );
+    } catch (error) {
+      console.error('Failed to complete maintenance notification:', error);
+    } finally {
+      setInboxBusyId(null);
+    }
+  };
+
+  const handleGoToMaintenance = () => {
+    setInboxOpen(false);
+    navigate('/maintenance');
   };
 
   return (
@@ -183,6 +255,21 @@ export function DashboardLayout() {
               <div className="hidden sm:block">
                 <GlobalSearch />
               </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="relative border-gray-700 bg-[#0F0F0F] text-gray-200 hover:bg-[#1C1C1C] hover:text-white"
+                onClick={() => setInboxOpen(true)}
+              >
+                <Bell className="w-4 h-4 mr-2" />
+                Inbox
+                {unreadInboxCount > 0 && (
+                  <span className="ml-2 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-semibold text-white">
+                    {unreadInboxCount}
+                  </span>
+                )}
+              </Button>
             </div>
 
             <div className="flex items-center gap-4">
@@ -211,6 +298,98 @@ export function DashboardLayout() {
             </div>
           </div>
         </header>
+
+        <Dialog open={inboxOpen} onOpenChange={setInboxOpen}>
+          <DialogContent className="max-w-4xl border-gray-800 bg-[#161616] text-gray-100">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-white">
+                <Inbox className="w-5 h-5" />
+                Notification Centre
+              </DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Service alerts and maintenance notifications.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-gray-300 hover:text-white"
+                onClick={loadInboxNotifications}
+                disabled={inboxLoading}
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${inboxLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
+
+            <div className="max-h-[65vh] overflow-y-auto pr-1 space-y-3">
+              {inboxLoading ? (
+                <div className="flex items-center justify-center py-8 text-gray-400">
+                  <Loader className="w-5 h-5 animate-spin mr-2" />
+                  Loading notifications...
+                </div>
+              ) : unreadInboxCount === 0 ? (
+                <div className="rounded-lg border border-gray-800 bg-[#0F0F0F] p-4 text-sm text-gray-400">
+                  No unacknowledged service alerts.
+                </div>
+              ) : (
+                inboxNotifications.map((notification) => {
+                  const busy = inboxBusyId === notification.maintenance_item_id;
+                  return (
+                    <Card key={notification.maintenance_item_id} className="border-gray-800 bg-[#0F0F0F]">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-yellow-300">Service due soon</p>
+                          <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                          <p className="text-gray-300">Vehicle rego: <span className="text-white">{notification.vehicle_rego ?? notification.vehicle_id ?? 'Unknown'}</span></p>
+                          <p className="text-gray-300">Current km: <span className="text-white">{notification.current_km != null ? `${Math.round(notification.current_km).toLocaleString()} km` : '—'}</span></p>
+                          <p className="text-gray-300">Target service km: <span className="text-white">{notification.target_service_km != null ? `${Math.round(notification.target_service_km).toLocaleString()} km` : '—'}</span></p>
+                          <p className="text-gray-300">KM remaining: <span className="text-white">{notification.km_remaining != null ? `${Math.round(notification.km_remaining).toLocaleString()} km` : '—'}</span></p>
+                          <p className="text-gray-300 sm:col-span-2">Created: <span className="text-white">{formatPerthDateTime(notification.created_at)}</span></p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            className="bg-[#FF6B35] text-white hover:bg-[#E55A2B]"
+                            disabled={busy}
+                            onClick={() => handleAcknowledgeInbox(notification.maintenance_item_id)}
+                          >
+                            <Check className="w-4 h-4 mr-1" />
+                            Acknowledge
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="bg-green-600 text-white hover:bg-green-500"
+                            disabled={busy}
+                            onClick={() => handleCompleteInbox(notification.maintenance_item_id)}
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            Mark completed
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-gray-300 hover:text-white"
+                            onClick={handleGoToMaintenance}
+                          >
+                            <ExternalLink className="w-4 h-4 mr-1" />
+                            Go to Maintenance
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Page content */}
         <main className="p-4 sm:p-6 lg:p-8">

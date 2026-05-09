@@ -18,20 +18,18 @@ import {
 } from '@/app/components/ui/alert-dialog';
 import { Search, Plus, Wrench, AlertTriangle, CheckCircle, Calendar, Trash2, Loader, Pencil } from 'lucide-react';
 import {
-  acknowledgeMaintenanceAlert,
-  completeMaintenanceAlert,
-  generateMaintenanceAlerts,
-  listOpenMaintenanceAlerts,
   listMaintenanceItems,
+  listServiceAlerts,
+  markMaintenanceItemCompleted,
   createMaintenanceItem,
   updateMaintenanceItem,
   deleteMaintenanceItem,
-  type MaintenanceAlert,
   type MaintenanceItem,
+  type ServiceAlert,
 } from '@/lib/db/maintenance';
 import { listVehicles, type Vehicle } from '@/lib/db/vehicles';
 import { listDrivers, type Driver } from '@/lib/db/drivers';
-import { formatPerthDate, formatPerthDateTime, PERTH_TIME_LABEL } from '@/lib/dateTime';
+import { formatPerthDate, PERTH_TIME_LABEL } from '@/lib/dateTime';
 
 type MaintenanceStatus = 'due' | 'passed' | 'done';
 
@@ -82,8 +80,8 @@ export function MaintenancePage() {
   const [selectedItem, setSelectedItem] = useState<MaintenanceItem | null>(null);
   const [editingItem, setEditingItem] = useState<MaintenanceItem | null>(null);
   const [formData, setFormData] = useState<FormState>(EMPTY_FORM);
-  const [automaticAlerts, setAutomaticAlerts] = useState<MaintenanceAlert[]>([]);
   const [alertBusyId, setAlertBusyId] = useState<string | null>(null);
+  const [serviceAlerts, setServiceAlerts] = useState<ServiceAlert[]>([]);
 
   const vehicleMap = useMemo(() => {
     const map = new Map<string, Vehicle>();
@@ -97,32 +95,22 @@ export function MaintenancePage() {
     return map;
   }, [drivers]);
 
-  const dedupeAlerts = (alerts: MaintenanceAlert[]) => {
-    const byKey = new Map<string, MaintenanceAlert>();
-    alerts.forEach((alert) => {
-      const key = `${alert.vehicle_id ?? alert.vehicle_rego ?? alert.id}|${alert.service_due_km ?? 'none'}`;
-      if (!byKey.has(key)) {
-        byKey.set(key, alert);
-      }
-    });
-    return Array.from(byKey.values());
-  };
-
   const loadAll = async () => {
     try {
       setLoading(true);
-      await generateMaintenanceAlerts();
-
-      const [itemsList, vehicleList, driverList, alerts] = await Promise.all([
+      const [itemsList, vehicleList, driverList, serviceAlertRows] = await Promise.all([
         listMaintenanceItems(),
         listVehicles(),
         listDrivers(),
-        listOpenMaintenanceAlerts(),
+        listServiceAlerts(),
       ]);
+      const activeServiceAlerts = serviceAlertRows.filter(
+        (alert) => alert.maintenance_item_id != null && alert.status !== 'completed',
+      );
       setMaintenanceItems(itemsList);
       setVehicles(vehicleList);
       setDrivers(driverList);
-      setAutomaticAlerts(dedupeAlerts(alerts));
+      setServiceAlerts(activeServiceAlerts);
       setError(null);
     } catch (err) {
       setError('Failed to load maintenance data');
@@ -291,28 +279,19 @@ export function MaintenancePage() {
     }
   };
 
-  const handleAcknowledgeAlert = async (alertId: string) => {
-    try {
-      setAlertBusyId(alertId);
-      await acknowledgeMaintenanceAlert(alertId);
-      setAutomaticAlerts((prev) => prev.filter((alert) => alert.id !== alertId));
-      setError(null);
-    } catch (err) {
-      setError('Failed to acknowledge maintenance alert');
-      console.error(err);
-    } finally {
-      setAlertBusyId(null);
-    }
+  const handleAcknowledgeAlert = (itemId: string) => {
+    setServiceAlerts((prev) => prev.filter((alert) => alert.maintenance_item_id !== itemId));
   };
 
-  const handleCompleteAlert = async (alertId: string) => {
+  const handleCompleteAlert = async (itemId: string) => {
     try {
-      setAlertBusyId(alertId);
-      await completeMaintenanceAlert(alertId);
-      setAutomaticAlerts((prev) => prev.filter((alert) => alert.id !== alertId));
+      setAlertBusyId(itemId);
+      await markMaintenanceItemCompleted(itemId);
+      setServiceAlerts((prev) => prev.filter((alert) => alert.maintenance_item_id !== itemId));
+      setMaintenanceItems((prev) => prev.filter((item) => item.id !== itemId));
       setError(null);
     } catch (err) {
-      setError('Failed to complete maintenance alert');
+      setError('Failed to mark item as completed');
       console.error(err);
     } finally {
       setAlertBusyId(null);
@@ -396,12 +375,12 @@ export function MaintenancePage() {
         </Card>
       </div>
 
-      {automaticAlerts.length > 0 && (
+      {serviceAlerts.length > 0 && (
         <Card className="bg-[#161616] border-yellow-900">
           <CardHeader>
             <CardTitle className="text-yellow-300">Automatic Service Alerts</CardTitle>
             <CardDescription className="text-gray-400">
-              Service due soon alerts generated automatically and kept open until acknowledged/completed.
+              Service due soon alerts generated automatically from vehicle odometer data.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -410,29 +389,28 @@ export function MaintenancePage() {
                 <TableHeader>
                   <TableRow className="border-gray-800 hover:bg-transparent">
                     <TableHead className="text-gray-400">Vehicle rego</TableHead>
-                    <TableHead className="text-gray-400">Current odometer</TableHead>
-                    <TableHead className="text-gray-400">Service due km</TableHead>
+                    <TableHead className="text-gray-400">Current km</TableHead>
+                    <TableHead className="text-gray-400">Next service km</TableHead>
                     <TableHead className="text-gray-400">KM remaining</TableHead>
-                    <TableHead className="text-gray-400">Created ({PERTH_TIME_LABEL})</TableHead>
                     <TableHead className="text-right text-gray-400">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {automaticAlerts.map((alert) => {
-                    const busy = alertBusyId === alert.id;
+                  {serviceAlerts.map((alert) => {
+                    const itemId = alert.maintenance_item_id ?? '';
+                    const busy = alertBusyId === itemId;
                     return (
-                      <TableRow key={alert.id} className="border-gray-800">
+                      <TableRow key={itemId} className="border-gray-800">
                         <TableCell className="text-gray-200">{alert.vehicle_rego ?? alert.vehicle_id ?? 'Unknown'}</TableCell>
                         <TableCell className="text-gray-300">
-                          {alert.current_odometer != null ? `${Math.round(alert.current_odometer).toLocaleString()} km` : '—'}
+                          {alert.current_km != null ? `${Math.round(alert.current_km).toLocaleString()} km` : '—'}
                         </TableCell>
                         <TableCell className="text-gray-300">
-                          {alert.service_due_km != null ? `${Math.round(alert.service_due_km).toLocaleString()} km` : '—'}
+                          {alert.next_service_km != null ? `${Math.round(alert.next_service_km).toLocaleString()} km` : '—'}
                         </TableCell>
                         <TableCell className="text-gray-300">
                           {alert.km_remaining != null ? `${Math.round(alert.km_remaining).toLocaleString()} km` : '—'}
                         </TableCell>
-                        <TableCell className="text-gray-300">{formatPerthDateTime(alert.created_at)}</TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-2">
                             <Button
@@ -440,7 +418,7 @@ export function MaintenancePage() {
                               size="sm"
                               className="border-gray-700 text-gray-200"
                               disabled={busy}
-                              onClick={() => handleAcknowledgeAlert(alert.id)}
+                              onClick={() => handleAcknowledgeAlert(itemId)}
                             >
                               Acknowledge
                             </Button>
@@ -448,7 +426,7 @@ export function MaintenancePage() {
                               size="sm"
                               className="bg-green-600 text-white hover:bg-green-500"
                               disabled={busy}
-                              onClick={() => handleCompleteAlert(alert.id)}
+                              onClick={() => handleCompleteAlert(itemId)}
                             >
                               Mark completed
                             </Button>
