@@ -1,5 +1,5 @@
 // Main dashboard page with real data from Supabase
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
@@ -9,11 +9,7 @@ import { Users, Truck, Calendar, Wrench, AlertCircle, TrendingUp, Loader, Activi
 import { getDashboardStats, DashboardStats } from '@/lib/db/dashboard';
 import { supabase } from '@/lib/supabase';
 import { PERTH_TIME_LABEL } from '@/lib/dateTime';
-import {
-  markMaintenanceItemCompleted,
-  listServiceAlerts,
-  type ServiceAlert,
-} from '@/lib/db/maintenance';
+import { useInbox } from '@/contexts/InboxContext';
 
 function startOfToday(): Date {
   const d = new Date();
@@ -23,15 +19,15 @@ function startOfToday(): Date {
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const { notifications, busyId: alertBusyId, acknowledge, complete } = useInbox();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeShiftCount, setActiveShiftCount] = useState(0);
   const [forceEndedToday, setForceEndedToday] = useState(0);
   const [adminActionsToday, setAdminActionsToday] = useState(0);
-  const [serviceAlerts, setServiceAlerts] = useState<ServiceAlert[]>([]);
   const [serviceAlertOpen, setServiceAlertOpen] = useState(false);
-  const [serviceAlertBusyId, setServiceAlertBusyId] = useState<string | null>(null);
+  const autoOpenedRef = useRef(false);
 
   const fetchActiveShiftCount = useCallback(async () => {
     const { count, error: err } = await supabase
@@ -61,37 +57,13 @@ export function DashboardPage() {
     setAdminActionsToday(count || 0);
   }, []);
 
-  const loadServiceAlerts = useCallback(async () => {
-    try {
-      const alerts = await listServiceAlerts();
-      const active = alerts.filter(
-        (a) => a.maintenance_item_id != null && a.status !== 'completed',
-      );
-      setServiceAlerts(active);
-      if (active.length > 0) {
-        setServiceAlertOpen(true);
-      }
-    } catch (err) {
-      console.error('Failed to load service alerts:', err);
+  // Auto-open popup once on first load if there are unacknowledged alerts
+  useEffect(() => {
+    if (!autoOpenedRef.current && notifications.length > 0) {
+      autoOpenedRef.current = true;
+      setServiceAlertOpen(true);
     }
-  }, []);
-
-  const handleAcknowledgeAlert = useCallback((alertId: string) => {
-    // Dismiss locally — no "acknowledged" status in the new schema
-    setServiceAlerts((prev) => prev.filter((a) => a.maintenance_item_id !== alertId));
-  }, []);
-
-  const handleCompleteAlert = useCallback(async (alertId: string) => {
-    try {
-      setServiceAlertBusyId(alertId);
-      await markMaintenanceItemCompleted(alertId);
-      setServiceAlerts((prev) => prev.filter((a) => a.maintenance_item_id !== alertId));
-    } catch (err) {
-      console.error('Failed to complete maintenance item:', err);
-    } finally {
-      setServiceAlertBusyId(null);
-    }
-  }, []);
+  }, [notifications.length]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -111,13 +83,12 @@ export function DashboardPage() {
     fetchActiveShiftCount();
     fetchForceEndedToday();
     fetchAdminActionsToday();
-    loadServiceAlerts();
 
     // Refresh stats every 30 seconds
     const interval = setInterval(fetchData, 30000);
 
     return () => clearInterval(interval);
-  }, [fetchActiveShiftCount, fetchForceEndedToday, fetchAdminActionsToday, loadServiceAlerts]);
+  }, [fetchActiveShiftCount, fetchForceEndedToday, fetchAdminActionsToday]);
 
   // Realtime subscription: auto-update monitor stats when shifts or audit logs change
   useEffect(() => {
@@ -211,12 +182,12 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {serviceAlerts.length > 0 && (
+      {notifications.length > 0 && (
         <Card className="bg-yellow-950/30 border-yellow-900">
           <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <p className="text-yellow-300 font-medium">Service due soon</p>
-              <p className="text-yellow-400 text-sm">{serviceAlerts.length} open automatic service alert(s)</p>
+              <p className="text-yellow-400 text-sm">{notifications.length} open automatic service alert(s)</p>
             </div>
             <Button
               onClick={() => setServiceAlertOpen(true)}
@@ -348,52 +319,54 @@ export function DashboardPage() {
             </DialogDescription>
           </DialogHeader>
 
-          {serviceAlerts.length === 0 ? (
+          {notifications.length === 0 ? (
             <p className="text-sm text-gray-400">No open service alerts.</p>
           ) : (
             <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-              {serviceAlerts.map((alert) => {
-                const itemId = alert.maintenance_item_id ?? '';
-                const busy = serviceAlertBusyId === itemId;
+              {notifications.map((notification) => {
+                const itemId = notification.maintenance_item_id;
+                const busy = alertBusyId === itemId;
                 return (
                   <div key={itemId} className="rounded-lg border border-gray-800 bg-[#0F0F0F] p-3">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-sm">
                       <div>
                         <p className="text-gray-500">Vehicle</p>
-                        <p className="text-gray-200">{alert.vehicle_rego ?? alert.vehicle_id ?? 'Unknown'}</p>
+                        <p className="text-gray-200">{notification.vehicle_rego ?? notification.vehicle_id ?? 'Unknown'}</p>
                       </div>
                       <div>
                         <p className="text-gray-500">Current km</p>
-                        <p className="text-gray-200">{alert.current_km != null ? `${Math.round(alert.current_km).toLocaleString()} km` : '—'}</p>
+                        <p className="text-gray-200">{notification.current_km != null ? `${Math.round(notification.current_km).toLocaleString()} km` : '—'}</p>
                       </div>
                       <div>
-                        <p className="text-gray-500">Next service km</p>
-                        <p className="text-gray-200">{alert.next_service_km != null ? `${Math.round(alert.next_service_km).toLocaleString()} km` : '—'}</p>
+                        <p className="text-gray-500">Target service km</p>
+                        <p className="text-gray-200">{notification.target_service_km != null ? `${Math.round(notification.target_service_km).toLocaleString()} km` : '—'}</p>
                       </div>
                       <div>
                         <p className="text-gray-500">KM remaining</p>
-                        <p className="text-gray-200">{alert.km_remaining != null ? `${Math.round(alert.km_remaining).toLocaleString()} km` : '—'}</p>
+                        <p className="text-gray-200">{notification.km_remaining != null ? `${Math.round(notification.km_remaining).toLocaleString()} km` : '—'}</p>
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button
                         size="sm"
                         className="bg-[#FF6B35] text-white hover:bg-[#E55A2B]"
-                        onClick={() => handleAcknowledgeAlert(itemId)}
+                        disabled={busy}
+                        onClick={() => acknowledge(itemId)}
                       >
-                        Acknowledge (dismiss)
+                        Acknowledge
                       </Button>
                       <Button
                         size="sm"
                         className="bg-green-600 text-white hover:bg-green-500"
                         disabled={busy}
-                        onClick={() => handleCompleteAlert(itemId)}
+                        onClick={() => complete(itemId)}
                       >
                         Mark completed
                       </Button>
                       <Button
                         size="sm"
-                        className="bg-[#FF6B35] text-white hover:bg-[#E55A2B]"
+                        variant="ghost"
+                        className="text-gray-300 hover:text-white"
                         onClick={() => {
                           setServiceAlertOpen(false);
                           navigate('/maintenance');

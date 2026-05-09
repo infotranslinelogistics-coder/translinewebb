@@ -414,9 +414,8 @@ export function MaintenancePage() {
                         <TableCell>
                           <div className="flex items-center justify-end gap-2">
                             <Button
-                              variant="outline"
                               size="sm"
-                              className="border-gray-700 text-gray-200"
+                              className="bg-[#FF6B35] text-white hover:bg-[#E55A2B]"
                               disabled={busy}
                               onClick={() => handleAcknowledgeAlert(itemId)}
                             >
