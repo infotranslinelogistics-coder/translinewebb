@@ -19,7 +19,13 @@ function startOfToday(): Date {
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { notifications, busyId: alertBusyId, acknowledge, complete } = useInbox();
+  const {
+    notifications,
+    checklistPendingCount,
+    busyId: alertBusyId,
+    acknowledge,
+    complete,
+  } = useInbox();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -182,6 +188,23 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {checklistPendingCount > 0 && (
+        <Card className="bg-red-950/30 border-red-900">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="text-red-300 font-medium">Checklist approvals pending</p>
+              <p className="text-red-400 text-sm">{checklistPendingCount} failed pre-start checklist request(s) need admin review.</p>
+            </div>
+            <Button
+              onClick={() => navigate('/checklist-approvals')}
+              className="bg-red-600 text-white hover:bg-red-500"
+            >
+              Review checklist approvals
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {notifications.length > 0 && (
         <Card className="bg-yellow-950/30 border-yellow-900">
           <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

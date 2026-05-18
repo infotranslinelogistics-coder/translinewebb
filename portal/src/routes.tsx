@@ -12,6 +12,7 @@ import { FuelLogsPage } from '@/pages/FuelLogsPage';
 import { DriverProfilePage } from '@/pages/DriverProfilePage';
 import { ShiftsPage } from '@/pages/ShiftsPage';
 import { ShiftDetailsPage } from '@/pages/ShiftDetailsPage';
+import { ChecklistApprovalsPage } from '@/pages/ChecklistApprovalsPage';
 import { VehicleProfilePage } from '@/pages/VehicleProfilePage';
 import { MaintenancePage } from '@/pages/MaintenancePage';
 import { LogsPage } from '@/pages/LogsPage';
@@ -42,6 +43,7 @@ export const router = createBrowserRouter(
         { path: 'fuel-logs', element: <FuelLogsPage /> },
         { path: 'shifts', element: <ShiftsPage /> },
         { path: 'shifts/:id', element: <ShiftDetailsPage /> },
+        { path: 'checklist-approvals', element: <ChecklistApprovalsPage /> },
         { path: 'maintenance', element: <MaintenancePage /> },
         { path: 'logs', element: <LogsPage /> },
         { path: 'settings', element: <SettingsPage /> },

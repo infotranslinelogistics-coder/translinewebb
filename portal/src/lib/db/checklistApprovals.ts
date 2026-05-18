@@ -1,0 +1,323 @@
+import { supabase } from '../supabase';
+
+export type ChecklistApprovalStatus = 'pending' | 'approved' | 'rejected' | string;
+
+export type ChecklistFailedItem = {
+  key: string;
+  label: string;
+  status: 'fail' | 'pending' | 'pass' | string;
+  valueLabel: string | null;
+  notes: string | null;
+};
+
+export interface ChecklistApprovalRequest {
+  request_id: string;
+  shift_id: string | null;
+  requested_at: string;
+  status: ChecklistApprovalStatus;
+  driver_id: string | null;
+  driver_name: string | null;
+  vehicle_id: string | null;
+  vehicle_rego: string | null;
+  failed_items_count: number;
+  failed_items: ChecklistFailedItem[];
+  admin_note: string | null;
+  raw_checklist: Record<string, unknown> | null;
+}
+
+const toText = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const toNumber = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const toRecord = (value: unknown): Record<string, unknown> | null => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const formatChecklistLabel = (key: string) =>
+  key
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const normalizeFailedItems = (raw: unknown): ChecklistFailedItem[] => {
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .map((entry) => {
+      if (!isRecord(entry)) return null;
+
+      const key = toText(entry.key) ?? toText(entry.item_key) ?? toText(entry.field) ?? toText(entry.name);
+      if (!key) return null;
+
+      const status = (toText(entry.status) ?? 'fail').toLowerCase();
+      const label =
+        toText(entry.label) ??
+        toText(entry.item_label) ??
+        toText(entry.title) ??
+        formatChecklistLabel(key);
+
+      return {
+        key,
+        label,
+        status,
+        valueLabel: toText(entry.value) ?? toText(entry.value_label) ?? null,
+        notes: toText(entry.notes) ?? toText(entry.note) ?? toText(entry.comment) ?? null,
+      } as ChecklistFailedItem;
+    })
+    .filter((entry): entry is ChecklistFailedItem => Boolean(entry));
+};
+
+const parseChecklistFromRow = (row: Record<string, unknown>): Record<string, unknown> | null => {
+  const direct =
+    toRecord(row.checklist_payload) ??
+    toRecord(row.checklist_snapshot) ??
+    toRecord(row.checklist) ??
+    toRecord(row.raw_checklist);
+
+  if (direct) return direct;
+
+  const metadata = toRecord(row.metadata);
+  if (!metadata) return null;
+
+  return (
+    toRecord(metadata.checklist_payload) ??
+    toRecord(metadata.checklist_snapshot) ??
+    toRecord(metadata.checklist) ??
+    toRecord(metadata.answers) ??
+    null
+  );
+};
+
+const mapApprovalRow = (
+  row: Record<string, unknown>,
+  driverNameById: Map<string, string>,
+  regoByVehicleId: Map<string, string>
+): ChecklistApprovalRequest => {
+  const requestId =
+    toText(row.request_id) ??
+    toText(row.id) ??
+    toText(row.approval_id) ??
+    '';
+
+  const driverId = toText(row.driver_id) ?? toText(row.requested_by_driver_id) ?? null;
+  const vehicleId = toText(row.vehicle_id) ?? null;
+
+  const failedItems = normalizeFailedItems(
+    row.failed_items ?? toRecord(row.metadata)?.failed_items ?? []
+  );
+
+  const failedItemsCount =
+    toNumber(row.failed_items_count) ??
+    toNumber(toRecord(row.metadata)?.failed_items_count) ??
+    failedItems.length;
+
+  const adminNote =
+    toText(row.admin_note) ??
+    toText(row.review_note) ??
+    toText(row.note) ??
+    toText(toRecord(row.metadata)?.admin_note) ??
+    null;
+
+  return {
+    request_id: requestId,
+    shift_id: toText(row.shift_id) ?? null,
+    requested_at:
+      toText(row.requested_at) ??
+      toText(row.created_at) ??
+      toText(row.requested_time) ??
+      new Date().toISOString(),
+    status: toText(row.status) ?? 'pending',
+    driver_id: driverId,
+    driver_name:
+      toText(row.driver_name) ??
+      (driverId ? driverNameById.get(driverId) ?? null : null) ??
+      toText(toRecord(row.metadata)?.driver_name) ??
+      null,
+    vehicle_id: vehicleId,
+    vehicle_rego:
+      toText(row.vehicle_rego) ??
+      toText(row.rego) ??
+      (vehicleId ? regoByVehicleId.get(vehicleId) ?? null : null) ??
+      toText(toRecord(row.metadata)?.vehicle_rego) ??
+      null,
+    failed_items_count: failedItemsCount,
+    failed_items: failedItems,
+    admin_note: adminNote,
+    raw_checklist: parseChecklistFromRow(row),
+  };
+};
+
+async function listApprovalsRaw(): Promise<Record<string, unknown>[]> {
+  const { data, error } = await supabase
+    .from('checklist_approvals')
+    .select('*')
+    .order('requested_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false, nullsFirst: false });
+
+  if (error) throw error;
+  return (data ?? []) as Record<string, unknown>[];
+}
+
+async function buildNameMaps(rows: Record<string, unknown>[]) {
+  const driverIds = rows
+    .map((row) => toText(row.driver_id) ?? toText(row.requested_by_driver_id))
+    .filter((value): value is string => Boolean(value));
+
+  const vehicleIds = rows
+    .map((row) => toText(row.vehicle_id))
+    .filter((value): value is string => Boolean(value));
+
+  const [driversResponse, vehiclesResponse] = await Promise.all([
+    driverIds.length > 0
+      ? supabase
+          .from('drivers')
+          .select('id, full_name')
+          .in('id', Array.from(new Set(driverIds)))
+      : Promise.resolve({ data: [], error: null }),
+    vehicleIds.length > 0
+      ? supabase
+          .from('vehicles')
+          .select('id, rego')
+          .in('id', Array.from(new Set(vehicleIds)))
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (driversResponse.error) throw driversResponse.error;
+  if (vehiclesResponse.error) throw vehiclesResponse.error;
+
+  const driverNameById = new Map<string, string>();
+  ((driversResponse.data ?? []) as Record<string, unknown>[]).forEach((row) => {
+    const id = toText(row.id);
+    const fullName = toText(row.full_name);
+    if (id && fullName) {
+      driverNameById.set(id, fullName);
+    }
+  });
+
+  const regoByVehicleId = new Map<string, string>();
+  ((vehiclesResponse.data ?? []) as Record<string, unknown>[]).forEach((row) => {
+    const id = toText(row.id);
+    const rego = toText(row.rego);
+    if (id && rego) {
+      regoByVehicleId.set(id, rego);
+    }
+  });
+
+  return { driverNameById, regoByVehicleId };
+}
+
+const isPendingStatus = (status: string | null | undefined) => {
+  const normalized = (status ?? '').trim().toLowerCase();
+  return normalized === 'pending' || normalized === 'requested' || normalized === 'awaiting_approval';
+};
+
+export async function listChecklistApprovals(): Promise<ChecklistApprovalRequest[]> {
+  const rows = await listApprovalsRaw();
+  if (rows.length === 0) return [];
+
+  const { driverNameById, regoByVehicleId } = await buildNameMaps(rows);
+
+  return rows
+    .map((row) => mapApprovalRow(row, driverNameById, regoByVehicleId))
+    .filter((row) => row.request_id.length > 0)
+    .sort((a, b) => new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime());
+}
+
+export async function listPendingChecklistApprovals(): Promise<ChecklistApprovalRequest[]> {
+  const rows = await listChecklistApprovals();
+  return rows.filter((row) => isPendingStatus(row.status));
+}
+
+export async function countPendingChecklistApprovals(): Promise<number> {
+  const rows = await listPendingChecklistApprovals();
+  return rows.length;
+}
+
+async function tryRpc(
+  fn: string,
+  requestId: string,
+  note: string,
+  payload: Record<string, unknown>
+): Promise<boolean> {
+  const { error } = await supabase.rpc(fn, payload);
+  if (!error) return true;
+
+  const message = `${error.message ?? ''} ${error.details ?? ''}`.toLowerCase();
+  const looksLikeArgMismatch =
+    message.includes('function') ||
+    message.includes('does not exist') ||
+    message.includes('argument') ||
+    message.includes('named') ||
+    message.includes('signature');
+
+  if (!looksLikeArgMismatch) {
+    throw error;
+  }
+
+  const fallbackPayloads: Record<string, unknown>[] = [
+    { request_id: requestId, note },
+    { p_request_id: requestId, p_note: note },
+    { p_request_id: requestId, note },
+  ];
+
+  for (const fallback of fallbackPayloads) {
+    const sameShape = JSON.stringify(fallback) === JSON.stringify(payload);
+    if (sameShape) continue;
+
+    const retry = await supabase.rpc(fn, fallback);
+    if (!retry.error) return true;
+
+    const retryMessage = `${retry.error.message ?? ''} ${retry.error.details ?? ''}`.toLowerCase();
+    const retryArgMismatch =
+      retryMessage.includes('function') ||
+      retryMessage.includes('does not exist') ||
+      retryMessage.includes('argument') ||
+      retryMessage.includes('named') ||
+      retryMessage.includes('signature');
+
+    if (!retryArgMismatch) {
+      throw retry.error;
+    }
+  }
+
+  return false;
+}
+
+export async function approveChecklistRequest(requestId: string, note: string): Promise<void> {
+  const success = await tryRpc('approve_checklist_request', requestId, note, {
+    request_id: requestId,
+    note,
+  });
+
+  if (!success) {
+    throw new Error('approve_checklist_request RPC call failed due to signature mismatch.');
+  }
+}
+
+export async function rejectChecklistRequest(requestId: string, note: string): Promise<void> {
+  const success = await tryRpc('reject_checklist_request', requestId, note, {
+    request_id: requestId,
+    note,
+  });
+
+  if (!success) {
+    throw new Error('reject_checklist_request RPC call failed due to signature mismatch.');
+  }
+}

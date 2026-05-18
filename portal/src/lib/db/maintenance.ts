@@ -75,6 +75,33 @@ const toRecord = (value: unknown): Record<string, unknown> | null => {
   return null;
 };
 
+const isUnauthorizedError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false;
+
+  const maybeError = error as {
+    status?: number | string;
+    code?: string | number;
+    message?: string;
+    details?: string;
+  };
+
+  const status =
+    typeof maybeError.status === 'string'
+      ? Number(maybeError.status)
+      : maybeError.status;
+
+  if (status === 401 || status === 403) return true;
+  if (maybeError.code === '401' || maybeError.code === '403' || maybeError.code === '42501') return true;
+
+  const message = `${maybeError.message ?? ''} ${maybeError.details ?? ''}`.toLowerCase();
+  return (
+    message.includes('unauthorized') ||
+    message.includes('not authenticated') ||
+    message.includes('jwt') ||
+    message.includes('permission denied')
+  );
+};
+
 const mapAlertRow = (row: Record<string, unknown>): MaintenanceAlert => {
   const metadata = toRecord(row.metadata);
 
@@ -210,7 +237,12 @@ export async function listServiceAlerts(): Promise<ServiceAlert[]> {
     .from('vehicle_service_alerts')
     .select('*');
 
-  if (error) throw error;
+  if (error) {
+    if (isUnauthorizedError(error)) {
+      return [];
+    }
+    throw error;
+  }
 
   return (data ?? []).map((row: Record<string, unknown>) => ({
     maintenance_item_id: toText(row.maintenance_item_id),
@@ -260,11 +292,15 @@ export async function listAdminInboxNotifications(): Promise<AdminInboxNotificat
       : Promise.resolve({ data: [], error: null }),
   ]);
 
-  if (serviceAlertResponse.error) throw serviceAlertResponse.error;
-  if (vehicleResponse.error) throw vehicleResponse.error;
+  if (serviceAlertResponse.error && !isUnauthorizedError(serviceAlertResponse.error)) {
+    throw serviceAlertResponse.error;
+  }
+  if (vehicleResponse.error && !isUnauthorizedError(vehicleResponse.error)) {
+    throw vehicleResponse.error;
+  }
 
   const alertsByMaintenanceId = new Map<string, ServiceAlert>();
-  ((serviceAlertResponse.data ?? []) as Record<string, unknown>[]).forEach((row) => {
+  ((serviceAlertResponse.error ? [] : serviceAlertResponse.data ?? []) as Record<string, unknown>[]).forEach((row) => {
     const maintenanceItemId = toText(row.maintenance_item_id);
     if (!maintenanceItemId) return;
 
@@ -280,7 +316,7 @@ export async function listAdminInboxNotifications(): Promise<AdminInboxNotificat
   });
 
   const regoByVehicleId = new Map<string, string>();
-  ((vehicleResponse.data ?? []) as Record<string, unknown>[]).forEach((row) => {
+  ((vehicleResponse.error ? [] : vehicleResponse.data ?? []) as Record<string, unknown>[]).forEach((row) => {
     const id = toText(row.id);
     const rego = toText(row.rego);
     if (id && rego) {

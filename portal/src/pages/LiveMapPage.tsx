@@ -40,6 +40,13 @@ export function LiveMapPage() {
   const [activeShifts, setActiveShifts] = useState<ShiftFull[]>([]);
   const [routeLoading, setRouteLoading] = useState(false);
   const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null);
+  const [startPoint, setStartPoint] = useState<[number, number] | null>(null);
+  const [latestPoint, setLatestPoint] = useState<[number, number] | null>(null);
+  const [latestLabel, setLatestLabel] = useState<'Current' | 'Latest'>('Latest');
+  const [lastStopPoint, setLastStopPoint] = useState<[number, number] | null>(null);
+  const [lastStopRecorded, setLastStopRecorded] = useState(false);
+  const [stopPoints, setStopPoints] = useState<[number, number][]>([]);
+  const [activeStopIndex, setActiveStopIndex] = useState(0);
   const routeLayerRef = useRef<L.Polyline | null>(null);
   const extraLayersRef = useRef<L.Layer[]>([]);
 
@@ -206,6 +213,21 @@ const clearRoute = () => {
         const durationText = `${Math.floor(totalSec / 3600)}h ${Math.floor((totalSec % 3600) / 60)}m`;
         const fmt = (d: Date) => formatPerthDateTime(d);
 
+        const shiftIsActive = shift.status === 'active' || !shift.ended_at;
+        const events = shift.id ? await fetchShiftEvents(shift.id) : [];
+        const sorted = [...events].sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+
+        const startLocation = {
+          latitude: shift.start_lat,
+          longitude: shift.start_lng,
+        };
+        const endLocation = {
+          latitude: end_lat,
+          longitude: end_lng,
+        };
+
         // ── events (break + stops) ──────────────────────────────────────────────
         const forceEndEvent = [...sorted].reverse().find((event) => event.event_type === 'force_end_shift');
         const endEventLabel = forceEndEvent ? 'Force ended' : 'Shift End';
@@ -261,7 +283,7 @@ const clearRoute = () => {
           const latestMarker = L.marker(snappedEnd, {
               icon: L.divIcon({ className: '', html: dotHtml('#ef4444', 16, true), iconSize: [16, 16], iconAnchor: [8, 8] }),
             }).bindPopup(popupCard([
-              { label: 'Event',    value: shiftIsActive ? 'Current Location' : 'Latest Location' },
+              { label: 'Event',    value: shiftIsActive ? 'Current Location' : endEventLabel },
               { label: 'Time',     value: endEventAt ? fmt(new Date(endEventAt)) : '-' },
               { label: 'Duration', value: durationText },
               { label: 'Distance', value: formatDistance(totalDistance) },
