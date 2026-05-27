@@ -4,10 +4,10 @@ export type ChecklistApprovalStatus = 'pending' | 'approved' | 'rejected' | stri
 
 export type ChecklistFailedItem = {
   key: string;
+  sectionTitle: string | null;
   label: string;
-  status: 'fail' | 'pending' | 'pass' | string;
-  valueLabel: string | null;
   notes: string | null;
+  critical: boolean;
 };
 
 export interface ChecklistApprovalRequest {
@@ -60,25 +60,43 @@ const normalizeFailedItems = (raw: unknown): ChecklistFailedItem[] => {
   if (!Array.isArray(raw)) return [];
 
   return raw
-    .map((entry) => {
+    .map((entry, index) => {
       if (!isRecord(entry)) return null;
 
-      const key = toText(entry.key) ?? toText(entry.item_key) ?? toText(entry.field) ?? toText(entry.name);
-      if (!key) return null;
+      const key =
+        toText(entry.id) ??
+        toText(entry.key) ??
+        toText(entry.item_key) ??
+        toText(entry.field) ??
+        toText(entry.name) ??
+        `failed_item_${index}`;
 
-      const status = (toText(entry.status) ?? 'fail').toLowerCase();
       const label =
         toText(entry.label) ??
         toText(entry.item_label) ??
         toText(entry.title) ??
         formatChecklistLabel(key);
 
+      const sectionTitle =
+        toText(entry.sectionTitle) ??
+        toText(entry.section_title) ??
+        toText(entry.section) ??
+        null;
+
+      const criticalRaw = entry.critical;
+      const critical =
+        typeof criticalRaw === 'boolean'
+          ? criticalRaw
+          : typeof criticalRaw === 'string'
+            ? ['true', '1', 'yes', 'critical'].includes(criticalRaw.trim().toLowerCase())
+            : false;
+
       return {
         key,
+        sectionTitle,
         label,
-        status,
-        valueLabel: toText(entry.value) ?? toText(entry.value_label) ?? null,
         notes: toText(entry.notes) ?? toText(entry.note) ?? toText(entry.comment) ?? null,
+        critical,
       } as ChecklistFailedItem;
     })
     .filter((entry): entry is ChecklistFailedItem => Boolean(entry));
@@ -123,11 +141,6 @@ const mapApprovalRow = (
     row.failed_items ?? toRecord(row.metadata)?.failed_items ?? []
   );
 
-  const failedItemsCount =
-    toNumber(row.failed_items_count) ??
-    toNumber(toRecord(row.metadata)?.failed_items_count) ??
-    failedItems.length;
-
   const adminNote =
     toText(row.admin_note) ??
     toText(row.review_note) ??
@@ -157,7 +170,7 @@ const mapApprovalRow = (
       (vehicleId ? regoByVehicleId.get(vehicleId) ?? null : null) ??
       toText(toRecord(row.metadata)?.vehicle_rego) ??
       null,
-    failed_items_count: failedItemsCount,
+    failed_items_count: failedItems.length,
     failed_items: failedItems,
     admin_note: adminNote,
     raw_checklist: parseChecklistFromRow(row),
@@ -250,74 +263,18 @@ export async function countPendingChecklistApprovals(): Promise<number> {
   return rows.length;
 }
 
-async function tryRpc(
-  fn: string,
-  requestId: string,
-  note: string,
-  payload: Record<string, unknown>
-): Promise<boolean> {
-  const { error } = await supabase.rpc(fn, payload);
-  if (!error) return true;
-
-  const message = `${error.message ?? ''} ${error.details ?? ''}`.toLowerCase();
-  const looksLikeArgMismatch =
-    message.includes('function') ||
-    message.includes('does not exist') ||
-    message.includes('argument') ||
-    message.includes('named') ||
-    message.includes('signature');
-
-  if (!looksLikeArgMismatch) {
-    throw error;
-  }
-
-  const fallbackPayloads: Record<string, unknown>[] = [
-    { request_id: requestId, note },
-    { p_request_id: requestId, p_note: note },
-    { p_request_id: requestId, note },
-  ];
-
-  for (const fallback of fallbackPayloads) {
-    const sameShape = JSON.stringify(fallback) === JSON.stringify(payload);
-    if (sameShape) continue;
-
-    const retry = await supabase.rpc(fn, fallback);
-    if (!retry.error) return true;
-
-    const retryMessage = `${retry.error.message ?? ''} ${retry.error.details ?? ''}`.toLowerCase();
-    const retryArgMismatch =
-      retryMessage.includes('function') ||
-      retryMessage.includes('does not exist') ||
-      retryMessage.includes('argument') ||
-      retryMessage.includes('named') ||
-      retryMessage.includes('signature');
-
-    if (!retryArgMismatch) {
-      throw retry.error;
-    }
-  }
-
-  return false;
-}
-
 export async function approveChecklistRequest(requestId: string, note: string): Promise<void> {
-  const success = await tryRpc('approve_checklist_request', requestId, note, {
-    request_id: requestId,
-    note,
+  const { error } = await supabase.rpc('approve_checklist_request', {
+    p_request_id: requestId,
+    p_admin_note: note ?? null,
   });
-
-  if (!success) {
-    throw new Error('approve_checklist_request RPC call failed due to signature mismatch.');
-  }
+  if (error) throw error;
 }
 
 export async function rejectChecklistRequest(requestId: string, note: string): Promise<void> {
-  const success = await tryRpc('reject_checklist_request', requestId, note, {
-    request_id: requestId,
-    note,
+  const { error } = await supabase.rpc('reject_checklist_request', {
+    p_request_id: requestId,
+    p_admin_note: note ?? null,
   });
-
-  if (!success) {
-    throw new Error('reject_checklist_request RPC call failed due to signature mismatch.');
-  }
+  if (error) throw error;
 }

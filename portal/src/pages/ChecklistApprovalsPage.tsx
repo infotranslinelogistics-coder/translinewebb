@@ -29,16 +29,15 @@ const isPendingStatus = (status: string) => {
 
 function getFailedItemSummary(request: ChecklistApprovalRequest): string {
   if (request.failed_items.length === 0) {
-    return request.failed_items_count > 0
-      ? `${request.failed_items_count} failed item(s)`
-      : 'No failed item details';
+    return 'No failed item details';
   }
 
   return request.failed_items
     .map((item) => {
+      const section = item.sectionTitle ? ` [${item.sectionTitle}]` : '';
       const note = item.notes ? ` (${item.notes})` : '';
-      const value = item.valueLabel ? `: ${item.valueLabel}` : '';
-      return `${item.label}${value}${note}`;
+      const critical = item.critical ? ' [Critical]' : '';
+      return `${item.label}${section}${critical}${note}`;
     })
     .join(', ');
 }
@@ -81,8 +80,19 @@ function ChecklistViewDialog({
                 <div className="space-y-2">
                   {request.failed_items.map((item) => (
                     <div key={`${request.request_id}-${item.key}`} className="rounded border border-gray-700 p-2 text-sm">
-                      <p className="text-white font-medium">{item.label}</p>
-                      {item.valueLabel && <p className="text-gray-300">Value: {item.valueLabel}</p>}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-white font-medium">{item.label}</p>
+                        {item.sectionTitle && (
+                          <span className="inline-flex items-center rounded border border-gray-700 bg-[#111111] px-2 py-0.5 text-[11px] text-gray-300">
+                            {item.sectionTitle}
+                          </span>
+                        )}
+                        {item.critical && (
+                          <span className="inline-flex items-center rounded border border-red-800 bg-red-950 px-2 py-0.5 text-[11px] text-red-300">
+                            Critical
+                          </span>
+                        )}
+                      </div>
                       {item.notes && <p className="text-gray-400">Note: {item.notes}</p>}
                     </div>
                   ))}
