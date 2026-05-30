@@ -42,6 +42,52 @@ function getFailedItemSummary(request: ChecklistApprovalRequest): string {
     .join(', ');
 }
 
+const formatChecklistLabel = (key: string) =>
+  key
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const toChecklistStatus = (value: unknown): 'Pass' | 'Fail' | 'Pending' => {
+  if (value == null) return 'Pending';
+  if (typeof value === 'boolean') return value ? 'Pass' : 'Fail';
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['pass', 'passed', 'ok', 'true', 'yes'].includes(normalized)) return 'Pass';
+    if (['fail', 'failed', 'false', 'no'].includes(normalized)) return 'Fail';
+  }
+  return 'Pending';
+};
+
+const normalizeChecklistEntries = (rawChecklist: Record<string, unknown> | null) => {
+  if (!rawChecklist) return [] as Array<{ key: string; label: string; status: 'Pass' | 'Fail' | 'Pending'; note: string | null }>;
+
+  return Object.entries(rawChecklist).map(([key, rawValue]) => {
+    if (!isRecord(rawValue)) {
+      return {
+        key,
+        label: formatChecklistLabel(key),
+        status: toChecklistStatus(rawValue),
+        note: typeof rawValue === 'string' ? rawValue : null,
+      };
+    }
+
+    const status = toChecklistStatus(rawValue.status ?? rawValue.result ?? rawValue.outcome ?? rawValue.pass ?? rawValue.value);
+    const noteCandidate = rawValue.notes ?? rawValue.note ?? rawValue.comment ?? rawValue.details ?? rawValue.value;
+    const note = typeof noteCandidate === 'string' && noteCandidate.trim().length > 0 ? noteCandidate.trim() : null;
+
+    return {
+      key,
+      label: formatChecklistLabel(key),
+      status,
+      note,
+    };
+  });
+};
+
 function ChecklistViewDialog({
   request,
   open,
@@ -51,6 +97,8 @@ function ChecklistViewDialog({
   open: boolean;
   onOpenChange: (next: boolean) => void;
 }) {
+  const checklistEntries = normalizeChecklistEntries(request?.raw_checklist ?? null);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl border-gray-800 bg-[#161616] text-gray-100">
@@ -94,6 +142,35 @@ function ChecklistViewDialog({
                         )}
                       </div>
                       {item.notes && <p className="text-gray-400">Note: {item.notes}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-gray-800 bg-[#0F0F0F] p-3">
+              <p className="mb-2 text-sm font-semibold text-white">Full Checklist ({checklistEntries.length})</p>
+              {checklistEntries.length === 0 ? (
+                <p className="text-sm text-gray-500">No checklist snapshot was saved for this request.</p>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {checklistEntries.map((item) => (
+                    <div key={`${request.request_id}-${item.key}-full`} className="rounded border border-gray-700 p-2 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-gray-200 font-medium">{item.label}</p>
+                        <span
+                          className={
+                            item.status === 'Fail'
+                              ? 'text-red-400'
+                              : item.status === 'Pass'
+                                ? 'text-green-400'
+                                : 'text-yellow-300'
+                          }
+                        >
+                          {item.status}
+                        </span>
+                      </div>
+                      {item.note && <p className="text-gray-400 mt-1">{item.note}</p>}
                     </div>
                   ))}
                 </div>

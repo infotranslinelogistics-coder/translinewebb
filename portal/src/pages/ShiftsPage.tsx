@@ -235,10 +235,20 @@ const getLocationSummary = (metadata: Record<string, unknown> | null | undefined
   const lng = metadata.lng ?? metadata.longitude;
   const speed = metadata.speed;
   if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+  const isDefaultGps = Math.abs(lat - 37.422) <= 0.005 && Math.abs(lng - -122.084) <= 0.005;
+  const suffix = isDefaultGps ? ' (Invalid/default coordinate)' : '';
   if (typeof speed === 'number') {
-    return `${lat.toFixed(5)}, ${lng.toFixed(5)} (${speed} km/h)`;
+    return `${lat.toFixed(5)}, ${lng.toFixed(5)} (${speed} km/h)${suffix}`;
   }
-  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}${suffix}`;
+};
+
+const isLikelyDefaultCoordinate = (lat?: number | null, lng?: number | null) => {
+  if (lat == null || lng == null) return false;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return true;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return true;
+  if (Math.abs(lat) < 0.00001 && Math.abs(lng) < 0.00001) return true;
+  return Math.abs(lat - 37.422) <= 0.005 && Math.abs(lng - -122.084) <= 0.005;
 };
 
 const getEventLabel = (eventType: string) => {
@@ -263,6 +273,44 @@ const getEventLabel = (eventType: string) => {
 
 const buildTimeline = (shift: Shift, events: ShiftEvent[]): TimelineItem[] => {
   const timeline: TimelineItem[] = [];
+  let locationBuffer: ShiftEvent[] = [];
+
+  const flushLocationBuffer = () => {
+    if (locationBuffer.length === 0) return;
+
+    const first = locationBuffer[0];
+    const last = locationBuffer[locationBuffer.length - 1];
+    const firstMetadata = isRecord(first.metadata) ? first.metadata : null;
+    const lastMetadata = isRecord(last.metadata) ? last.metadata : null;
+
+    if (locationBuffer.length <= 2) {
+      locationBuffer.forEach((event, index) => {
+        const metadata = isRecord(event.metadata) ? event.metadata : null;
+        timeline.push({
+          id: event.id ?? `${event.shift_id}-${event.event_type}-${event.created_at}-${index}`,
+          eventType: event.event_type,
+          label: getEventLabel(event.event_type),
+          timestamp: event.created_at,
+          details: getLocationSummary(metadata) ?? undefined,
+        });
+      });
+    } else {
+      timeline.push({
+        id: `${shift.id}-location-summary-${last.created_at}`,
+        eventType: 'location_summary',
+        label: `${locationBuffer.length} location updates`,
+        timestamp: last.created_at,
+        details: [
+          getLocationSummary(firstMetadata),
+          getLocationSummary(lastMetadata),
+        ]
+          .filter(Boolean)
+          .join(' -> ') || 'Location updates condensed for readability.',
+      });
+    }
+
+    locationBuffer = [];
+  };
 
   if (shift.started_at) {
     timeline.push({
@@ -274,9 +322,16 @@ const buildTimeline = (shift: Shift, events: ShiftEvent[]): TimelineItem[] => {
   }
 
   events.forEach((event, index) => {
+    if (event.event_type === 'location') {
+      locationBuffer.push(event);
+      return;
+    }
+
+    flushLocationBuffer();
+
     const metadata = isRecord(event.metadata) ? event.metadata : null;
     const durationLabel = event.event_type === 'break_end' ? getMetadataDuration(metadata) : null;
-    const locationLabel = getLocationSummary(metadata);
+    const locationLabel = event.event_type === 'location' ? getLocationSummary(metadata) : null;
     const details = durationLabel
       ? `Duration: ${durationLabel}`
       : locationLabel ?? undefined;
@@ -289,6 +344,8 @@ const buildTimeline = (shift: Shift, events: ShiftEvent[]): TimelineItem[] => {
       details,
     });
   });
+
+  flushLocationBuffer();
 
   if (shift.ended_at) {
     timeline.push({
@@ -316,6 +373,9 @@ const getBreakSummary = (events: ShiftEvent[]): BreakSummary => {
     if (Number.isNaN(eventMs)) return;
 
     if (event.event_type === 'break_start') {
+      if (openBreakStart != null) {
+        return;
+      }
       openBreakStart = eventMs;
       return;
     }
@@ -326,11 +386,7 @@ const getBreakSummary = (events: ShiftEvent[]): BreakSummary => {
       return;
     }
 
-    const metadata = isRecord(event.metadata) ? event.metadata : null;
-    const fallbackDuration = getDurationSecondsFromMetadata(metadata);
-    if (fallbackDuration != null) {
-      totalSeconds += Math.floor(fallbackDuration);
-    }
+    // Ignore unmatched break_end events to avoid overcounting.
   });
 
   const latestBreakEvent = breakEvents.length > 0 ? breakEvents[breakEvents.length - 1] : null;
@@ -348,6 +404,23 @@ const getBreakSummary = (events: ShiftEvent[]): BreakSummary => {
     isOnBreak,
     latestBreakAt,
   };
+};
+
+const mergeChecklistSources = (
+  eventChecklist: Record<string, unknown> | null,
+  shiftChecklist: Shift['checklist'] | null | undefined,
+): ChecklistDisplayItem[] => {
+  const merged = new Map<string, unknown>();
+
+  if (isRecord(shiftChecklist)) {
+    Object.entries(shiftChecklist).forEach(([key, value]) => merged.set(key, value));
+  }
+
+  if (isRecord(eventChecklist)) {
+    Object.entries(eventChecklist).forEach(([key, value]) => merged.set(key, value));
+  }
+
+  return Array.from(merged.entries()).map(([key, value]) => getChecklistItem(key, value));
 };
 
 export function ShiftsPage() {
@@ -551,8 +624,9 @@ export function ShiftsPage() {
   };
 
   const latestChecklistEvent = getLatestChecklistEvent(shiftEvents);
-  const checklistItems = normalizeChecklist(
-    getChecklistAnswersFromMetadata(isRecord(latestChecklistEvent?.metadata) ? latestChecklistEvent.metadata : null) as Shift['checklist']
+  const checklistItems = mergeChecklistSources(
+    getChecklistAnswersFromMetadata(isRecord(latestChecklistEvent?.metadata) ? latestChecklistEvent.metadata : null),
+    detailShift?.checklist,
   );
   const checklistSummary = {
     ...getChecklistSummary(checklistItems),
@@ -912,6 +986,9 @@ export function ShiftsPage() {
                         <span>{item.latitude}</span>
                         <span>{item.longitude}</span>
                       </div>
+                      {isLikelyDefaultCoordinate(item.latitude, item.longitude) && (
+                        <p className="mt-1 text-[11px] text-amber-300">Invalid/default coordinate flagged</p>
+                      )}
                       <p className="text-[11px] text-gray-500 mt-1">
                         {formatTimestamp(item.created_at)}
                       </p>

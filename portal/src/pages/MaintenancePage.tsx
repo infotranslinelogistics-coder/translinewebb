@@ -95,6 +95,12 @@ export function MaintenancePage() {
     return map;
   }, [drivers]);
 
+  const maintenanceById = useMemo(() => {
+    const map = new Map<string, MaintenanceItem>();
+    maintenanceItems.forEach((item) => map.set(item.id, item));
+    return map;
+  }, [maintenanceItems]);
+
   const loadAll = async () => {
     try {
       setLoading(true);
@@ -389,9 +395,10 @@ export function MaintenancePage() {
                 <TableHeader>
                   <TableRow className="border-gray-800 hover:bg-transparent">
                     <TableHead className="text-gray-400">Vehicle rego</TableHead>
+                    <TableHead className="text-gray-400">Reason</TableHead>
                     <TableHead className="text-gray-400">Current km</TableHead>
                     <TableHead className="text-gray-400">Next service km</TableHead>
-                    <TableHead className="text-gray-400">KM remaining</TableHead>
+                    <TableHead className="text-gray-400">Due / Overdue</TableHead>
                     <TableHead className="text-right text-gray-400">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -399,17 +406,33 @@ export function MaintenancePage() {
                   {serviceAlerts.map((alert) => {
                     const itemId = alert.maintenance_item_id ?? '';
                     const busy = alertBusyId === itemId;
+                    const maintenanceItem = maintenanceById.get(itemId);
+                    const reason =
+                      maintenanceItem?.notes?.trim() ||
+                      maintenanceItem?.title?.trim() ||
+                      maintenanceItem?.service_type ||
+                      'Scheduled Service';
+                    const dueStatus =
+                      alert.km_remaining == null
+                        ? 'Unknown'
+                        : alert.km_remaining <= 0
+                          ? `Overdue by ${Math.abs(Math.round(alert.km_remaining)).toLocaleString()} km`
+                          : `Due in ${Math.round(alert.km_remaining).toLocaleString()} km`;
+
                     return (
                       <TableRow key={itemId} className="border-gray-800">
                         <TableCell className="text-gray-200">{alert.vehicle_rego ?? alert.vehicle_id ?? 'Unknown'}</TableCell>
+                        <TableCell className="text-gray-300 max-w-[22rem]">
+                          <p className="line-clamp-2">{reason}</p>
+                        </TableCell>
                         <TableCell className="text-gray-300">
                           {alert.current_km != null ? `${Math.round(alert.current_km).toLocaleString()} km` : '—'}
                         </TableCell>
                         <TableCell className="text-gray-300">
                           {alert.next_service_km != null ? `${Math.round(alert.next_service_km).toLocaleString()} km` : '—'}
                         </TableCell>
-                        <TableCell className="text-gray-300">
-                          {alert.km_remaining != null ? `${Math.round(alert.km_remaining).toLocaleString()} km` : '—'}
+                        <TableCell className={alert.km_remaining != null && alert.km_remaining <= 0 ? 'text-red-400' : 'text-gray-300'}>
+                          {dueStatus}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-2">

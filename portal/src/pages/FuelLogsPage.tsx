@@ -16,6 +16,7 @@ import { listDrivers } from '@/lib/db/drivers';
 import { listVehicles, type Vehicle } from '@/lib/db/vehicles';
 import { supabase } from '@/lib/supabase';
 import { formatPerthDateTime, PERTH_TIME_LABEL } from '@/lib/dateTime';
+import { getSignedStorageUrl } from '@/lib/storage/privateFiles';
 
 interface FuelMetadata {
   litres: number | null;
@@ -254,15 +255,17 @@ export function FuelLogsPage() {
       };
     }
 
-    const { data, error } = await supabase
-      .storage
-      .from('fuel_receipts')
-      .createSignedUrl(receiptPath, 3600);
+    const signed = await getSignedStorageUrl({
+      filePath: receiptPath,
+      bucket: 'fuel_receipts',
+      bucketCandidates: ['fuel_receipts', 'receipts', 'shift_event_receipts', 'event_receipts'],
+      expiresInSeconds: 3600,
+    });
 
     return {
       ...row,
-      receipt_url: data?.signedUrl ?? null,
-      receipt_error: error?.message ?? null,
+      receipt_url: signed.url ?? null,
+      receipt_error: signed.error ?? null,
     };
   };
 

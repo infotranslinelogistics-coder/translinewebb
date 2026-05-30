@@ -38,7 +38,8 @@ interface OdometerRow {
 }
 interface DriverRow {
   driver_id?: string; id?: string; full_name?: string; name?: string; email?: string;
-  profile_email?: string; phone?: string; status?: string; licence_number?: string;
+  profile_email?: string; phone?: string; profile_phone?: string; phone_number?: string;
+  mobile_number?: string; contact_number?: string; status?: string; licence_number?: string;
 }
 interface DriverAssignmentSnapshot {
   current_vehicle_id: string | null; current_vehicle_rego: string | null;
@@ -56,6 +57,16 @@ const PAGE_SIZE = 10;
 function fmtDate(d: string | null | undefined) {
   return formatPerthDateTime(d);
 }
+
+function pickFirstText(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return null;
+}
+
 function statusBadge(s: string | null | undefined) {
   if (s === 'active') return 'bg-blue-950 text-blue-300 border-blue-800';
   if (s === 'completed') return 'bg-green-950 text-green-400 border-green-900';
@@ -264,6 +275,14 @@ export function DriverProfilePage() {
   if (loading) return <div className="flex justify-center py-16"><Loader className="w-8 h-8 text-[#FF6B35] animate-spin" /></div>;
 
   const driverName = driver?.full_name ?? driver?.name ?? driver?.email ?? driverId;
+  const driverEmail = pickFirstText(driver?.email, driver?.profile_email);
+  const driverPhone = pickFirstText(
+    driver?.phone,
+    driver?.profile_phone,
+    driver?.phone_number,
+    driver?.mobile_number,
+    driver?.contact_number
+  );
   const assignedVehicle = assignmentSnapshot?.current_vehicle_id ? vehicleMap.get(assignmentSnapshot.current_vehicle_id) : null;
   const telemetryVehicle = status?.vehicle_id ? vehicleMap.get(status.vehicle_id) : null;
   const formatVehicleLabel = (v?: Vehicle | null) => {
@@ -293,8 +312,8 @@ export function DriverProfilePage() {
         <div>
           <h1 className="text-3xl font-bold text-white mb-1">{driverName}</h1>
           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-400">
-            {driver?.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{driver.email}</span>}
-            {driver?.phone && <span className="flex items-center gap-1"><PhoneCall className="w-3.5 h-3.5" />{driver.phone}</span>}
+            {driverEmail && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{driverEmail}</span>}
+            {driverPhone && <span className="flex items-center gap-1"><PhoneCall className="w-3.5 h-3.5" />{driverPhone}</span>}
             {driver?.licence_number && <span className="text-gray-500">Licence: {driver.licence_number}</span>}
           </div>
         </div>
@@ -343,12 +362,37 @@ export function DriverProfilePage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="bg-[#161616] border-gray-800">
               <CardHeader>
+                <CardTitle className="text-white">Driver Details</CardTitle>
+                <CardDescription className="text-gray-400">Core contact and identity information</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="grid grid-cols-2 gap-y-2">
+                  {([
+                    ['Driver name', driverName],
+                    ['Email', driverEmail ?? '—'],
+                    ['Phone number', driverPhone ?? '—'],
+                    ['Driver ID', driverId],
+                  ] as [string, string][]).map(([label, value]) => (
+                    <React.Fragment key={label}>
+                      <span className="text-gray-500">{label}</span>
+                      <span className="text-gray-200 text-right break-all">{value}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-[#161616] border-gray-800">
+              <CardHeader>
                 <CardTitle className="text-white">Current Status</CardTitle>
                 <CardDescription className="text-gray-400">Live operational indicators</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="grid grid-cols-2 gap-y-2">
                   {([
+                    ['Driver name',      driverName],
+                    ['Email',            driverEmail ?? '—'],
+                    ['Phone number',     driverPhone ?? '—'],
                     ['Last seen',         lastSeenLabel],
                     ['GPS sharing',       gpsActive ? 'Active' : 'Inactive'],
                     ['On shift since',    activeShift ? fmtDate(activeShift.started_at) : 'Not on shift'],
