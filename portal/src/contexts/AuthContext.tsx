@@ -14,6 +14,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function logLogoutSource(reason: string) {
+  console.error('[AUTH LOGOUT SOURCE]', reason);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -43,7 +47,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, currentSession) => {
+    } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+      if (event === 'SIGNED_OUT') {
+        console.error('[AUTH LOGOUT SOURCE]', 'supabase-auth-state-signed-out');
+      }
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
       setLoading(false);
@@ -85,14 +92,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (driverLookupError) {
           console.error('Failed to verify portal access role:', driverLookupError);
-          await supabase.auth.signOut({ scope: 'local' });
+          console.error('Portal access role verification failed; preserving active auth session.');
           return {
             error: new Error('Unable to verify portal access right now. Please try again.'),
           };
         }
 
         if (driverRow) {
-          await supabase.auth.signOut({ scope: 'local' });
+          console.error('Driver account detected during portal sign-in; preserving active auth session.');
           return {
             error: new Error('Drivers cannot log in to the admin portal.'),
           };
@@ -108,6 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
+      logLogoutSource('explicit-user-logout');
       const { error } = await supabase.auth.signOut({ scope: 'local' });
       if (error) {
         throw error;

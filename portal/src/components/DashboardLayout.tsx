@@ -198,6 +198,7 @@ export function DashboardLayout() {
   const [onlineDrivers] = useState(12); // Mock data - replace with real data
 
   const handleLogout = async () => {
+    console.error('[AUTH LOGOUT SOURCE]', 'dashboard-layout-logout-button');
     await signOut();
     setSidebarOpen(false);
     navigate('/login', { replace: true });
