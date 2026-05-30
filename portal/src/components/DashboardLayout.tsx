@@ -197,7 +197,37 @@ export function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onlineDrivers] = useState(12); // Mock data - replace with real data
 
-  const handleLogout = async () => {
+  const handleLogout = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const source = event.currentTarget;
+    const clickedElement = event.target instanceof HTMLElement ? event.target : null;
+    const clickedTag = clickedElement?.tagName ?? 'unknown';
+    const clickedId = clickedElement?.id ?? '';
+    const clickedClass = clickedElement?.className ?? '';
+    const clickedText = clickedElement?.textContent?.trim().slice(0, 80) ?? '';
+
+    console.error('[AUTH LOGOUT CLICK]', {
+      trusted: event.nativeEvent.isTrusted,
+      clickedTag,
+      clickedId,
+      clickedClass,
+      clickedText,
+      sourceTag: source.tagName,
+      sourceDataAttr: source.dataset.logoutTrigger,
+    });
+
+    if (!event.nativeEvent.isTrusted) {
+      console.error('[AUTH LOGOUT SOURCE]', 'blocked-untrusted-logout-click');
+      return;
+    }
+
+    if (source.dataset.logoutTrigger !== 'true') {
+      console.error('[AUTH LOGOUT SOURCE]', 'blocked-non-logout-click-source');
+      return;
+    }
+
     console.error('[AUTH LOGOUT SOURCE]', 'dashboard-layout-logout-button');
     await signOut();
     setSidebarOpen(false);
@@ -247,6 +277,7 @@ export function DashboardLayout() {
           {/* Logout button */}
           <div className="p-4 border-t border-gray-800">
             <Button
+              data-logout-trigger="true"
               onClick={handleLogout}
               variant="ghost"
               className="w-full justify-start text-gray-300 hover:bg-[#0F0F0F] hover:text-white"
@@ -261,8 +292,22 @@ export function DashboardLayout() {
       {/* Mobile sidebar */}
       {sidebarOpen && (
         <div className="lg:hidden">
-          <div className="fixed inset-0 z-40 bg-black/80" onClick={() => setSidebarOpen(false)} />
-          <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-[#161616] border-r border-gray-800">
+          <div
+            className="fixed inset-0 z-40 bg-black/80"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (event.target === event.currentTarget) {
+                setSidebarOpen(false);
+              }
+            }}
+          />
+          <aside
+            className="fixed inset-y-0 left-0 z-50 w-64 bg-[#161616] border-r border-gray-800"
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between h-16 px-6 border-b border-gray-800">
                 <div className="flex items-center">
@@ -309,6 +354,7 @@ export function DashboardLayout() {
 
               <div className="p-4 border-t border-gray-800">
                 <Button
+                  data-logout-trigger="true"
                   onClick={handleLogout}
                   variant="ghost"
                   className="w-full justify-start text-gray-300 hover:bg-[#0F0F0F] hover:text-white"
