@@ -12,6 +12,7 @@ import { fetchShiftWithEvents, type Shift, type ShiftEvent, type ShiftFull } fro
 import { supabase } from '@/lib/supabase';
 import { getOdometerPhotoUrl } from '@/lib/storage/odometerPhotos';
 import { formatPerthDateTime, PERTH_TIME_LABEL } from '@/lib/dateTime';
+import { computeWorkingSeconds, summarizeBreakAllowance } from '@/lib/breakAllowance';
 
 function formatTimestamp(value?: string | null) {
   if (!value) return '—';
@@ -66,24 +67,6 @@ type ChecklistDisplayItem = {
   statusLabel: string;
   valueLabel: string | null;
   notes: string | null;
-};
-
-type BreakSession = {
-  startAt: string;
-  endAt: string | null;
-  durationSeconds: number;
-  isOpen: boolean;
-};
-
-type BreakSummaryStatus = 'none' | 'on-break' | 'completed';
-
-type BreakSummary = {
-  status: BreakSummaryStatus;
-  sessions: BreakSession[];
-  totalBreakSeconds: number;
-  currentBreakSeconds: number | null;
-  latestBreakStartAt: string | null;
-  latestBreakEndAt: string | null;
 };
 
 const CHECKLIST_EVENT_TYPES = ['checklist_submitted', 'checklist_completed', 'shift_checklist_submitted'];
@@ -234,90 +217,6 @@ const formatDuration = (totalSeconds: number | null | undefined) => {
   if (hours > 0) return `${hours}h ${minutes}m ${remainingSeconds}s`;
   if (minutes > 0) return `${minutes}m ${remainingSeconds}s`;
   return `${remainingSeconds}s`;
-};
-
-const getBreakSummary = (events: ShiftEvent[]): BreakSummary => {
-  const breakEvents = events
-    .filter((event) => event.event_type === 'break_start' || event.event_type === 'break_end')
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
-  if (breakEvents.length === 0) {
-    return {
-      status: 'none',
-      sessions: [],
-      totalBreakSeconds: 0,
-      currentBreakSeconds: null,
-      latestBreakStartAt: null,
-      latestBreakEndAt: null,
-    };
-  }
-
-  const sessions: BreakSession[] = [];
-  let openBreakStartAt: string | null = null;
-  let totalBreakSeconds = 0;
-  let latestBreakStartAt: string | null = null;
-  let latestBreakEndAt: string | null = null;
-
-  breakEvents.forEach((event) => {
-    const eventMs = new Date(event.created_at).getTime();
-    if (Number.isNaN(eventMs)) return;
-
-    if (event.event_type === 'break_start') {
-      if (openBreakStartAt) {
-        return;
-      }
-      openBreakStartAt = event.created_at;
-      latestBreakStartAt = event.created_at;
-      return;
-    }
-
-    latestBreakEndAt = event.created_at;
-
-    if (!openBreakStartAt) {
-      return;
-    }
-
-    const startMs = new Date(openBreakStartAt).getTime();
-    if (Number.isNaN(startMs)) {
-      openBreakStartAt = null;
-      return;
-    }
-
-    const durationSeconds = Math.max(0, Math.floor((eventMs - startMs) / 1000));
-    sessions.push({
-      startAt: openBreakStartAt,
-      endAt: event.created_at,
-      durationSeconds,
-      isOpen: false,
-    });
-    totalBreakSeconds += durationSeconds;
-    openBreakStartAt = null;
-  });
-
-  let currentBreakSeconds: number | null = null;
-
-  if (openBreakStartAt) {
-    const startMs = new Date(openBreakStartAt).getTime();
-    if (!Number.isNaN(startMs)) {
-      currentBreakSeconds = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
-      totalBreakSeconds += currentBreakSeconds;
-      sessions.push({
-        startAt: openBreakStartAt,
-        endAt: null,
-        durationSeconds: currentBreakSeconds,
-        isOpen: true,
-      });
-    }
-  }
-
-  return {
-    status: openBreakStartAt ? 'on-break' : 'completed',
-    sessions,
-    totalBreakSeconds,
-    currentBreakSeconds,
-    latestBreakStartAt,
-    latestBreakEndAt,
-  };
 };
 
 const buildCondensedTimeline = (events: ShiftEvent[]): ShiftEvent[] => {
@@ -600,7 +499,11 @@ export function ShiftDetailsPage() {
     );
     return mergeChecklistSources(eventAnswers, shift?.checklist as Shift['checklist']);
   }, [latestChecklistEvent, shift]);
-  const breakSummary = useMemo(() => getBreakSummary(events), [events]);
+  const breakSummary = useMemo(() => summarizeBreakAllowance(events), [events]);
+  const workingSeconds = useMemo(
+    () => computeWorkingSeconds(shift?.started_at ?? null, shift?.ended_at ?? null, breakSummary),
+    [shift?.started_at, shift?.ended_at, breakSummary],
+  );
   const timelineEvents = useMemo(() => buildCondensedTimeline(events), [events]);
 
   useEffect(() => {
@@ -960,16 +863,26 @@ export function ShiftDetailsPage() {
                     <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
                       <p className="text-gray-500">Break status</p>
                       <p className="mt-1 text-sm text-gray-200">
-                        {breakSummary.status === 'none'
-                          ? 'No break taken'
-                          : breakSummary.status === 'on-break'
-                            ? 'On break'
-                            : 'Completed'}
+                        {breakSummary.isOnBreak
+                          ? 'On break'
+                          : breakSummary.rawBreakSeconds > 0
+                            ? 'Completed'
+                            : 'No break taken'}
                       </p>
                     </div>
                     <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
-                      <p className="text-gray-500">Total break time</p>
-                      <p className="mt-1 text-sm text-gray-200">{formatDuration(breakSummary.totalBreakSeconds)}</p>
+                      <p className="text-gray-500">Raw break time taken</p>
+                      <p className="mt-1 text-sm text-gray-200">{formatDuration(breakSummary.rawBreakSeconds)}</p>
+                    </div>
+                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                      <p className="text-gray-500">Allowed break time</p>
+                      <p className="mt-1 text-sm text-gray-200">{formatDuration(breakSummary.allowanceSeconds)}</p>
+                    </div>
+                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                      <p className="text-gray-500">Allowance status</p>
+                      <p className={`mt-1 text-sm ${breakSummary.status === 'exceeded' ? 'text-red-400' : 'text-green-400'}`}>
+                        {breakSummary.status === 'exceeded' ? 'Exceeded allowance' : 'Within allowance'}
+                      </p>
                     </div>
                     <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
                       <p className="text-gray-500">Break start time</p>
@@ -980,9 +893,9 @@ export function ShiftDetailsPage() {
                       <p className="mt-1 text-sm text-gray-200">{formatTimestamp(breakSummary.latestBreakEndAt)}</p>
                     </div>
                     <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
-                      <p className="text-gray-500">Break duration</p>
+                      <p className="text-gray-500">Current/last break duration</p>
                       <p className="mt-1 text-sm text-gray-200">
-                        {breakSummary.status === 'on-break'
+                        {breakSummary.isOnBreak
                           ? formatDuration(breakSummary.currentBreakSeconds)
                           : breakSummary.sessions.length > 0
                             ? formatDuration(breakSummary.sessions[breakSummary.sessions.length - 1]?.durationSeconds)
@@ -990,10 +903,32 @@ export function ShiftDetailsPage() {
                       </p>
                     </div>
                     <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                      <p className="text-gray-500">Working time (minus max 30m break)</p>
+                      <p className="mt-1 text-sm text-gray-200">{formatDuration(workingSeconds)}</p>
+                    </div>
+                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
                       <p className="text-gray-500">Break sessions</p>
                       <p className="mt-1 text-sm text-gray-200">{breakSummary.sessions.length}</p>
                     </div>
                   </div>
+
+                  {breakSummary.blockMessage && (
+                    <div className="rounded bg-amber-950/40 border border-amber-800 p-2 text-xs text-amber-300">
+                      {breakSummary.blockMessage}
+                    </div>
+                  )}
+
+                  {breakSummary.shouldAutoEndCurrentBreak && (
+                    <div className="rounded bg-red-950/40 border border-red-800 p-2 text-xs text-red-300">
+                      Break allowance reached while on break. Current break should be auto-ended.
+                    </div>
+                  )}
+
+                  {breakSummary.status === 'exceeded' && (
+                    <div className="rounded bg-red-950/40 border border-red-800 p-2 text-xs text-red-300">
+                      Break exceeded by {formatDuration(breakSummary.exceededBySeconds)}.
+                    </div>
+                  )}
 
                   {breakSummary.sessions.length === 0 ? (
                     <p className="text-xs text-gray-500">No break taken</p>

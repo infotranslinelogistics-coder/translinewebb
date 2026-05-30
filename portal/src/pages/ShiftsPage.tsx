@@ -12,6 +12,7 @@ import { Search, Clock, Loader } from 'lucide-react';
 import { listShifts, Shift, countActiveShifts, countTodayShifts } from '@/lib/db/shifts';
 import { supabase } from '@/lib/supabase';
 import { formatPerthDateTime, PERTH_TIME_LABEL } from '@/lib/dateTime';
+import { computeWorkingSeconds, summarizeBreakAllowance } from '@/lib/breakAllowance';
 
 const formatChecklistLabel = (key: string) =>
   key
@@ -57,16 +58,6 @@ type ChecklistSummary = {
   answerCount: number;
   hasFailures: boolean | null;
 };
-
-type BreakSummary = {
-  allowanceSeconds: number;
-  usedSeconds: number;
-  remainingSeconds: number;
-  isOnBreak: boolean;
-  latestBreakAt: string | null;
-};
-
-const BREAK_ALLOWANCE_SECONDS = 30 * 60;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -360,52 +351,6 @@ const buildTimeline = (shift: Shift, events: ShiftEvent[]): TimelineItem[] => {
   return timeline;
 };
 
-const getBreakSummary = (events: ShiftEvent[]): BreakSummary => {
-  const breakEvents = events
-    .filter((event) => event.event_type === 'break_start' || event.event_type === 'break_end')
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
-  let openBreakStart: number | null = null;
-  let totalSeconds = 0;
-
-  breakEvents.forEach((event) => {
-    const eventMs = new Date(event.created_at).getTime();
-    if (Number.isNaN(eventMs)) return;
-
-    if (event.event_type === 'break_start') {
-      if (openBreakStart != null) {
-        return;
-      }
-      openBreakStart = eventMs;
-      return;
-    }
-
-    if (openBreakStart != null) {
-      totalSeconds += Math.max(0, Math.floor((eventMs - openBreakStart) / 1000));
-      openBreakStart = null;
-      return;
-    }
-
-    // Ignore unmatched break_end events to avoid overcounting.
-  });
-
-  const latestBreakEvent = breakEvents.length > 0 ? breakEvents[breakEvents.length - 1] : null;
-  const isOnBreak = latestBreakEvent?.event_type === 'break_start';
-  const latestBreakAt = latestBreakEvent?.created_at ?? null;
-
-  if (isOnBreak && openBreakStart != null) {
-    totalSeconds += Math.max(0, Math.floor((Date.now() - openBreakStart) / 1000));
-  }
-
-  return {
-    allowanceSeconds: BREAK_ALLOWANCE_SECONDS,
-    usedSeconds: totalSeconds,
-    remainingSeconds: Math.max(0, BREAK_ALLOWANCE_SECONDS - totalSeconds),
-    isOnBreak,
-    latestBreakAt,
-  };
-};
-
 const mergeChecklistSources = (
   eventChecklist: Record<string, unknown> | null,
   shiftChecklist: Shift['checklist'] | null | undefined,
@@ -635,7 +580,12 @@ export function ShiftsPage() {
     hasFailures: checklistItems.length > 0 ? checklistItems.some((item) => item.status === 'fail') : null,
   };
   const timelineItems = detailShift ? buildTimeline(detailShift, shiftEvents) : [];
-  const breakSummary = getBreakSummary(shiftEvents);
+  const breakSummary = summarizeBreakAllowance(shiftEvents);
+  const workingSeconds = computeWorkingSeconds(
+    detailShift?.started_at ?? null,
+    detailShift?.ended_at ?? null,
+    breakSummary,
+  );
   const locationItems = shiftEvents
     .filter((event) => event.event_type === 'location');
   const latestLocationItems = locationItems.slice(-5).reverse();
@@ -1080,20 +1030,33 @@ export function ShiftsPage() {
               <CardContent className="space-y-3 text-sm">
                 <div className="space-y-2 text-xs">
                   <div className="bg-[#121212] rounded-lg px-3 py-2 text-gray-300">
-                    Used: {formatDurationSeconds(breakSummary.usedSeconds)}
+                    Raw break taken: {formatDurationSeconds(breakSummary.rawBreakSeconds) ?? '—'}
                   </div>
                   <div className="bg-[#121212] rounded-lg px-3 py-2 text-gray-300">
-                    Allowance: {formatDurationSeconds(breakSummary.allowanceSeconds)}
+                    Allowed break time: {formatDurationSeconds(breakSummary.allowanceSeconds) ?? '30m 0s'}
                   </div>
                   <div className="bg-[#121212] rounded-lg px-3 py-2 text-gray-300">
-                    Remaining: {formatDurationSeconds(breakSummary.remainingSeconds)}
+                    Counted for payroll/work time: {formatDurationSeconds(breakSummary.countedBreakSeconds) ?? '—'}
+                  </div>
+                  <div className="bg-[#121212] rounded-lg px-3 py-2 text-gray-300">
+                    Working time (minus max 30m break): {formatDurationSeconds(workingSeconds ?? -1) ?? '—'}
                   </div>
                   <div className="bg-[#121212] rounded-lg px-3 py-2">
                     <span className="text-gray-400">Status:</span>{" "}
-                    <span className={breakSummary.isOnBreak ? "text-yellow-400" : "text-green-400"}>
-                      {breakSummary.isOnBreak ? "On break" : "Working"}
+                    <span className={breakSummary.status === 'exceeded' ? 'text-red-400' : 'text-green-400'}>
+                      {breakSummary.status === 'exceeded' ? 'Exceeded allowance' : 'Within allowance'}
                     </span>
                   </div>
+                  {breakSummary.blockMessage && (
+                    <div className="bg-amber-950/40 border border-amber-800 rounded-lg px-3 py-2 text-amber-300">
+                      {breakSummary.blockMessage}
+                    </div>
+                  )}
+                  {breakSummary.shouldAutoEndCurrentBreak && (
+                    <div className="bg-red-950/40 border border-red-800 rounded-lg px-3 py-2 text-red-300">
+                      Break allowance reached while on break. Current break should be auto-ended.
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
