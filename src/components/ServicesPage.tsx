@@ -1,6 +1,16 @@
 import { Truck, Package, Home, Building2, CheckCircle } from 'lucide-react';
+import type { Page } from '../App';
 
-export function ServicesPage() {
+interface ServicesPageProps {
+  onNavigate: (page: Page) => void;
+}
+
+export function ServicesPage({ onNavigate }: ServicesPageProps) {
+  const handleNavigate = (page: Page) => {
+    onNavigate(page);
+    window.scrollTo(0, 0);
+  };
+
   return (
     <div>
       {/* Hero Section */}
@@ -173,7 +183,10 @@ export function ServicesPage() {
           <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
             Get in touch with our team to discuss your requirements and receive a competitive quote.
           </p>
-          <button className="interactive-button bg-[#D32323] text-white px-8 py-3 rounded hover:bg-[#B01E1E]">
+          <button
+            onClick={() => handleNavigate('quote')}
+            className="interactive-button bg-[#D32323] text-white px-8 py-3 rounded hover:bg-[#B01E1E]"
+          >
             Request a Quote
           </button>
         </div>

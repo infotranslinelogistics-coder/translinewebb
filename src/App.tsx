@@ -44,13 +44,13 @@ export default function App() {
       case 'home':
         return <HomePage onNavigate={setCurrentPage} />;
       case 'services':
-        return <ServicesPage />;
+        return <ServicesPage onNavigate={setCurrentPage} />;
       case 'fleet':
-        return <FleetPage />;
+        return <FleetPage onNavigate={setCurrentPage} />;
       case 'contact':
         return <ContactPage />;
       case 'faq':
-        return <FaqPage />;
+        return <FaqPage onNavigate={setCurrentPage} />;
       case 'quote':
         return <QuotePage />;
       case 'privacy':

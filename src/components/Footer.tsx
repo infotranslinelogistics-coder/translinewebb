@@ -18,16 +18,21 @@ export function Footer({ onNavigate }: FooterProps) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Company Info */}
           <div className="md:col-span-1">
-            <div className="interactive-button flex items-center gap-3 mb-4 w-fit rounded-xl bg-[#FEF2F2]/90 px-4 py-2 border border-[#FAD4D4]/80 shadow-lg shadow-[#D32323]/10">
+            <button
+              type="button"
+              onClick={() => handleNavigate('home')}
+              aria-label="Go to home page"
+              className="interactive-button flex items-center gap-3 mb-4 w-fit rounded-xl bg-[#FEF2F2]/90 px-4 py-2 border border-[#FAD4D4]/80 shadow-lg shadow-[#D32323]/10"
+            >
               <img
                 src={logo}
                 alt="Transline Logistics"
                 className="h-10 w-auto animate-logo-pop transition-transform duration-300 ease-out hover:scale-105 drop-shadow-sm"
               />
-              <div className="text-sm font-semibold text-[#8A1B1B] tracking-wide">
+              <span className="text-sm font-semibold text-[#8A1B1B] tracking-wide">
                 Transline Logistics
-              </div>
-            </div>
+              </span>
+            </button>
             <p className="text-sm text-gray-300/90">
               Reliable freight and transport solutions across Perth.
             </p>

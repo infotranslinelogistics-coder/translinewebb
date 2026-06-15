@@ -1,6 +1,16 @@
 import { Truck, Package, Container, Box } from 'lucide-react';
+import type { Page } from '../App';
 
-export function FleetPage() {
+interface FleetPageProps {
+  onNavigate: (page: Page) => void;
+}
+
+export function FleetPage({ onNavigate }: FleetPageProps) {
+  const handleNavigate = (page: Page) => {
+    onNavigate(page);
+    window.scrollTo(0, 0);
+  };
+
   return (
     <div>
       {/* Hero Section */}
@@ -177,7 +187,10 @@ export function FleetPage() {
           <p className="text-xl text-red-100 mb-8 max-w-2xl mx-auto">
             Contact our team and we'll recommend the best vehicle for your transport requirements.
           </p>
-          <button className="interactive-button bg-white text-[#D32323] px-8 py-3 rounded hover:bg-gray-100">
+          <button
+            onClick={() => handleNavigate('contact')}
+            className="interactive-button bg-white text-[#D32323] px-8 py-3 rounded hover:bg-gray-100"
+          >
             Get Expert Advice
           </button>
         </div>
