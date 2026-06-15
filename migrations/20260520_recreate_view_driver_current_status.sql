@@ -1,7 +1,8 @@
 -- Recreate view_driver_current_status with the column contract expected by the portal.
 -- Missing telemetry columns are exposed as NULL placeholders for compatibility.
 
-create or replace view public.view_driver_current_status as
+drop view if exists public.view_driver_current_status;
+create view public.view_driver_current_status as
 with latest_status as (
   select distinct on (dse.driver_id)
     dse.driver_id,

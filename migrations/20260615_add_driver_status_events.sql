@@ -76,7 +76,10 @@ create trigger trg_log_driver_status
   for each row execute function public.log_driver_status_from_shift_event();
 
 -- 3) Recreate the view now that the table exists ----------------------------
-create or replace view public.view_driver_current_status as
+-- Drop first: the live view has a different column layout, and CREATE OR REPLACE
+-- cannot rename/reorder existing view columns (only append new ones).
+drop view if exists public.view_driver_current_status;
+create view public.view_driver_current_status as
 with latest_status as (
   select distinct on (dse.driver_id)
     dse.driver_id, dse.state as status, dse.shift_id
