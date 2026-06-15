@@ -29,10 +29,32 @@ SUPABASE_URL=... SUPABASE_ANON_KEY=... node scripts/verify_supabase.mjs
 SQL editor → paste `scripts/verify_supabase.sql` → Run. Rows with `MISSING` or
 `WARN` sort to the top.
 
-## Latest result (relations probe, project `fjllbnhcyugxltiresjp`)
-`present: 25/25  missing: 0` — every table/view the code queries exists. ✅
-(403/RLS responses confirm existence; a missing relation would be `404 PGRST205`.)
-**Still to confirm via the SQL script:** the 14 functions, 3 buckets, and RLS policies.
+## Result (authoritative SQL check, project `fjllbnhcyugxltiresjp`, 2026-06-15)
+
+**3 objects MISSING; everything else present.**
+
+| Object | Kind | Impact if missing |
+|--------|------|-------------------|
+| `driver_status_events` | table | Driver-profile **status history** + live status updates (`useDriverPresence`); also blocks the unapplied view migration (see below) |
+| `driver_push_tokens` | table | **Push notifications** can't be delivered — the app's token save fails (caught, non-fatal) so no tokens are ever stored |
+| `delete_driver_log_admin` | function | Portal **Logs page "Delete"** fails (the sibling `delete_fuel_log_admin` exists) |
+
+Everything else is healthy:
+- 23/25 tables/views present; 13/14 functions present.
+- All 3 buckets present **and private** (`public=false`) ✅ — photo previews are fine.
+- **No RLS-without-policy warnings.**
+
+### Notable: an unapplied migration
+`migrations/20260520_recreate_view_driver_current_status.sql` defines `view_driver_current_status`
+to select **from `driver_status_events`**. That table is missing, yet the view exists — which is only
+possible if **that migration was never applied** (Postgres won't create a view over a missing table).
+So the live view is an older definition, and applying the migration will fail until `driver_status_events`
+is created first.
+
+> ⚠️ The anon REST probe (`verify_supabase.mjs`) initially reported these as "present" because this
+> project returns a **blanket 403** for the anon role on every relation, which hides the missing-vs-denied
+> distinction. The probe now reports such responses as `denied` and warns. **The SQL catalog check is
+> authoritative.**
 
 ## Object → feature map (what breaks if it's MISSING)
 

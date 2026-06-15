@@ -51,7 +51,7 @@ async function probe(rel) {
     });
     if (res.status === 200) return { rel, status: 'present', detail: '200 (readable by anon)' };
     if (res.status === 401 || res.status === 403)
-      return { rel, status: 'present', detail: `${res.status} (exists, RLS/permission)` };
+      return { rel, status: 'denied', detail: `${res.status} (anon blocked — existence unknown)` };
     if (res.status === 404) {
       let code = '';
       try { code = (await res.json())?.code || ''; } catch {}
@@ -75,10 +75,16 @@ for (const r of results.sort((a, b) => a.status.localeCompare(b.status) || a.rel
 }
 
 const missing = results.filter((r) => r.status === 'MISSING');
+const denied = results.filter((r) => r.status === 'denied');
 const errored = results.filter((r) => r.status === 'error');
 console.log('-'.repeat(70));
-console.log(`present: ${results.filter((r) => r.status === 'present').length}/${RELATIONS.length}` +
-  `  missing: ${missing.length}  errored: ${errored.length}`);
+console.log(`present: ${results.filter((r) => r.status === 'present').length}` +
+  `  denied: ${denied.length}  missing: ${missing.length}  errored: ${errored.length}  / ${RELATIONS.length}`);
+if (denied.length === RELATIONS.length) {
+  console.log('\n!! Every relation returned 401/403: the anon role is blanket-denied on this');
+  console.log('   project, so this REST probe CANNOT distinguish "exists" from "missing".');
+  console.log('   Trust scripts/verify_supabase.sql (catalog check) instead.');
+}
 if (errored.length) {
   console.log('\nNote: network may be blocked from this environment. If everything errored,');
   console.log('run scripts/verify_supabase.sql in the Supabase SQL editor instead.');
