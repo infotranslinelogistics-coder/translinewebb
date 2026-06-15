@@ -29,7 +29,7 @@ select
   null::numeric as speed_kmh,
   null::numeric as heading,
   lsh.vehicle_id,
-  dp.last_seen_at
+  dp.last_seen as last_seen_at
 from public.drivers d
 left join latest_status ls on ls.driver_id = d.id
 left join latest_shift lsh on lsh.driver_id = d.id
