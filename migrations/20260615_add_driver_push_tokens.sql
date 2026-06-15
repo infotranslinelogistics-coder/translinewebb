@@ -14,6 +14,7 @@ create table if not exists public.driver_push_tokens (
 alter table public.driver_push_tokens enable row level security;
 
 -- A driver may manage only their own token rows (drivers.user_id = auth.uid()).
+drop policy if exists "drivers manage own push tokens" on public.driver_push_tokens;
 create policy "drivers manage own push tokens" on public.driver_push_tokens
   for all to authenticated
   using (driver_id in (select id from public.drivers where user_id = auth.uid()))

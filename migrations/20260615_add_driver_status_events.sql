@@ -24,6 +24,7 @@ create index if not exists idx_driver_status_events_shift
 
 alter table public.driver_status_events enable row level security;
 
+drop policy if exists "admins read driver status events" on public.driver_status_events;
 create policy "admins read driver status events" on public.driver_status_events
   for select to authenticated
   using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
