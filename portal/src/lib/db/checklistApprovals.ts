@@ -280,6 +280,17 @@ export async function setChecklistNoteVisibility(
   if (error) throw error;
 }
 
+// Applies note visibility without letting a missing migration break the core
+// approve/reject action: if set_checklist_note_visibility isn't deployed yet the
+// decision still goes through and we just log the visibility step as skipped.
+async function applyNoteVisibility(requestId: string, visible: boolean): Promise<void> {
+  try {
+    await setChecklistNoteVisibility(requestId, visible);
+  } catch (err) {
+    console.warn('checklistApprovals: could not set note visibility (migration applied?):', err);
+  }
+}
+
 export async function approveChecklistRequest(
   requestId: string,
   note: string,
@@ -290,7 +301,7 @@ export async function approveChecklistRequest(
     p_admin_note: note ?? null,
   });
   if (error) throw error;
-  await setChecklistNoteVisibility(requestId, noteVisibleToDriver);
+  await applyNoteVisibility(requestId, noteVisibleToDriver);
 }
 
 export async function rejectChecklistRequest(
@@ -303,5 +314,5 @@ export async function rejectChecklistRequest(
     p_admin_note: note ?? null,
   });
   if (error) throw error;
-  await setChecklistNoteVisibility(requestId, noteVisibleToDriver);
+  await applyNoteVisibility(requestId, noteVisibleToDriver);
 }
