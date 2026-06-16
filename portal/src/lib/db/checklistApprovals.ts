@@ -22,6 +22,7 @@ export interface ChecklistApprovalRequest {
   failed_items_count: number;
   failed_items: ChecklistFailedItem[];
   admin_note: string | null;
+  note_visible_to_driver: boolean;
   raw_checklist: Record<string, unknown> | null;
 }
 
@@ -173,6 +174,7 @@ const mapApprovalRow = (
     failed_items_count: failedItems.length,
     failed_items: failedItems,
     admin_note: adminNote,
+    note_visible_to_driver: row.note_visible_to_driver === true,
     raw_checklist: parseChecklistFromRow(row),
   };
 };
@@ -263,18 +265,43 @@ export async function countPendingChecklistApprovals(): Promise<number> {
   return rows.length;
 }
 
-export async function approveChecklistRequest(requestId: string, note: string): Promise<void> {
+/**
+ * Sets whether the admin note on a request is shown to the driver in their app.
+ * Backed by the set_checklist_note_visibility RPC (admin-only).
+ */
+export async function setChecklistNoteVisibility(
+  requestId: string,
+  visible: boolean
+): Promise<void> {
+  const { error } = await supabase.rpc('set_checklist_note_visibility', {
+    p_request_id: requestId,
+    p_visible: visible,
+  });
+  if (error) throw error;
+}
+
+export async function approveChecklistRequest(
+  requestId: string,
+  note: string,
+  noteVisibleToDriver = false
+): Promise<void> {
   const { error } = await supabase.rpc('approve_checklist_request', {
     p_request_id: requestId,
     p_admin_note: note ?? null,
   });
   if (error) throw error;
+  await setChecklistNoteVisibility(requestId, noteVisibleToDriver);
 }
 
-export async function rejectChecklistRequest(requestId: string, note: string): Promise<void> {
+export async function rejectChecklistRequest(
+  requestId: string,
+  note: string,
+  noteVisibleToDriver = false
+): Promise<void> {
   const { error } = await supabase.rpc('reject_checklist_request', {
     p_request_id: requestId,
     p_admin_note: note ?? null,
   });
   if (error) throw error;
+  await setChecklistNoteVisibility(requestId, noteVisibleToDriver);
 }

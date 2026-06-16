@@ -196,6 +196,7 @@ export function ChecklistApprovalsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [approveNoteById, setApproveNoteById] = useState<Record<string, string>>({});
   const [rejectNoteById, setRejectNoteById] = useState<Record<string, string>>({});
+  const [noteVisibleById, setNoteVisibleById] = useState<Record<string, boolean>>({});
   const [viewing, setViewing] = useState<ChecklistApprovalRequest | null>(null);
 
   const load = useCallback(async () => {
@@ -258,9 +259,10 @@ export function ChecklistApprovalsPage() {
   const handleApprove = useCallback(
     async (request: ChecklistApprovalRequest) => {
       const note = (approveNoteById[request.request_id] ?? '').trim();
+      const noteVisible = noteVisibleById[request.request_id] ?? false;
       try {
         setBusyId(request.request_id);
-        await approveChecklistRequest(request.request_id, note);
+        await approveChecklistRequest(request.request_id, note, noteVisible);
         await load();
       } catch (err) {
         console.error('ChecklistApprovalsPage: approve failed:', err);
@@ -269,7 +271,7 @@ export function ChecklistApprovalsPage() {
         setBusyId(null);
       }
     },
-    [approveNoteById, load]
+    [approveNoteById, noteVisibleById, load]
   );
 
   const handleReject = useCallback(
@@ -279,10 +281,11 @@ export function ChecklistApprovalsPage() {
         setError('Reject note is required.');
         return;
       }
+      const noteVisible = noteVisibleById[request.request_id] ?? false;
 
       try {
         setBusyId(request.request_id);
-        await rejectChecklistRequest(request.request_id, note);
+        await rejectChecklistRequest(request.request_id, note, noteVisible);
         await load();
       } catch (err) {
         console.error('ChecklistApprovalsPage: reject failed:', err);
@@ -291,7 +294,7 @@ export function ChecklistApprovalsPage() {
         setBusyId(null);
       }
     },
-    [rejectNoteById, load]
+    [rejectNoteById, noteVisibleById, load]
   );
 
   return (
@@ -403,6 +406,11 @@ export function ChecklistApprovalsPage() {
                           <TableCell className="text-gray-300 text-sm">{getFailedItemSummary(request)}</TableCell>
                           <TableCell className="space-y-2">
                             <p className="text-sm text-gray-300">{request.admin_note ?? 'No note'}</p>
+                            {!isPending && request.admin_note ? (
+                              <p className="text-xs text-gray-500">
+                                {request.note_visible_to_driver ? 'Visible to driver' : 'Hidden from driver'}
+                              </p>
+                            ) : null}
                             {isPending && (
                               <>
                                 <Textarea
@@ -421,6 +429,17 @@ export function ChecklistApprovalsPage() {
                                   placeholder="Required reject note"
                                   className="min-h-16 bg-[#0F0F0F] border-gray-700 text-white"
                                 />
+                                <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={noteVisibleById[request.request_id] ?? false}
+                                    onChange={(event) =>
+                                      setNoteVisibleById((prev) => ({ ...prev, [request.request_id]: event.target.checked }))
+                                    }
+                                    className="h-4 w-4 accent-[#FF6B35]"
+                                  />
+                                  Show this note to the driver
+                                </label>
                               </>
                             )}
                           </TableCell>
