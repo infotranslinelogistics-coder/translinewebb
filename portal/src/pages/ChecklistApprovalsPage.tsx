@@ -406,10 +406,8 @@ export function ChecklistApprovalsPage() {
                           <TableCell className="text-gray-300 text-sm">{getFailedItemSummary(request)}</TableCell>
                           <TableCell className="space-y-2">
                             <p className="text-sm text-gray-300">{request.admin_note ?? 'No note'}</p>
-                            {!isPending && request.admin_note ? (
-                              <p className="text-xs text-gray-500">
-                                {request.note_visible_to_driver ? 'Visible to driver' : 'Hidden from driver'}
-                              </p>
+                            {!isPending && request.admin_note && request.note_visible_to_driver ? (
+                              <p className="text-xs text-green-500">Visible to driver</p>
                             ) : null}
                             {isPending && (
                               <>
