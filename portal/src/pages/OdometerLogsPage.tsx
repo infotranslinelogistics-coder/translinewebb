@@ -30,6 +30,8 @@ interface OdometerShiftRow {
   end_photo_url?: string | null;
   start_photo_error?: string | null;
   end_photo_error?: string | null;
+  shift_status?: string | null;
+  shift_ended_at?: string | null;
 }
 
 const PAGE_SIZE = 20;
@@ -107,6 +109,34 @@ export function OdometerLogsPage() {
     };
   };
 
+  const hydrateShiftState = async (rowsToHydrate: OdometerShiftRow[]): Promise<OdometerShiftRow[]> => {
+    const shiftIds = Array.from(new Set(rowsToHydrate.map((row) => row.shift_id).filter(Boolean)));
+    if (shiftIds.length === 0) return rowsToHydrate;
+
+    const { data, error: shiftError } = await supabase
+      .from('shifts')
+      .select('id, status, ended_at')
+      .in('id', shiftIds);
+
+    if (shiftError) {
+      console.error('Failed to hydrate shift status for odometer rows:', shiftError);
+      return rowsToHydrate;
+    }
+
+    const shiftMap = new Map(
+      ((data as { id: string; status: string | null; ended_at: string | null }[]) ?? []).map((row) => [row.id, row])
+    );
+
+    return rowsToHydrate.map((row) => {
+      const shift = shiftMap.get(row.shift_id);
+      return {
+        ...row,
+        shift_status: shift?.status ?? null,
+        shift_ended_at: shift?.ended_at ?? null,
+      };
+    });
+  };
+
   const fetchRows = async () => {
     try {
       setLoading(true);
@@ -144,7 +174,8 @@ export function OdometerLogsPage() {
       }
 
       const hydratedRows = await Promise.all(((data as OdometerShiftRow[]) ?? []).map(resolvePhotos));
-      setRows(hydratedRows);
+      const hydratedWithShiftState = await hydrateShiftState(hydratedRows);
+      setRows(hydratedWithShiftState);
       setTotalCount(count ?? 0);
       setError(null);
     } catch (fetchError) {
@@ -248,7 +279,7 @@ export function OdometerLogsPage() {
               </div>
             </div>
             <p className="text-4xl font-bold text-white">
-            {currentOdometerValue != null ? `${currentOdometerValue.toLocaleString()} km` : 'None'}
+            {currentOdometerValue != null ? `${currentOdometerValue.toLocaleString()} km` : 'No reading yet'}
             </p>
             {latestRecordedAt && (
               <p className="text-xs text-gray-500">
@@ -365,6 +396,23 @@ export function OdometerLogsPage() {
                         startReading != null && endReading != null
                           ? endReading - startReading
                           : null;
+                      const shiftStatus = (row.shift_status ?? '').trim().toLowerCase();
+                      const isShiftCompleted =
+                        Boolean(row.shift_ended_at) ||
+                        ['ended', 'completed', 'cancelled'].includes(shiftStatus);
+
+                      const endKmLabel = hasEndReading
+                        ? `${row.odometer_end?.toLocaleString()} km`
+                        : isShiftCompleted
+                          ? 'Missing end odometer'
+                          : 'Pending';
+
+                      const distanceLabel = (() => {
+                        if (!hasStartReading) return 'Pending';
+                        if (!hasEndReading) return isShiftCompleted ? 'Missing end odometer' : 'Pending';
+                        if ((distance ?? 0) < 0) return 'Invalid odometer';
+                        return `${(distance ?? 0).toLocaleString()} km`;
+                      })();
 
                       const renderPhotoCell = (
                         title: string,
@@ -442,11 +490,11 @@ export function OdometerLogsPage() {
                           <TableCell className="text-gray-300">
                             {hasStartReading ? `${row.odometer_start?.toLocaleString()} km` : 'Pending'}
                           </TableCell>
-                          <TableCell className="text-gray-300">
-                            {hasEndReading ? `${row.odometer_end?.toLocaleString()} km` : 'Pending'}
+                          <TableCell className={endKmLabel === 'Missing end odometer' ? 'text-amber-300' : 'text-gray-300'}>
+                            {endKmLabel}
                           </TableCell>
-                          <TableCell className="text-gray-300">
-                            {distance != null ? `${distance.toLocaleString()} km` : 'Pending'}
+                          <TableCell className={distanceLabel === 'Invalid odometer' ? 'text-red-400' : 'text-gray-300'}>
+                            {distanceLabel}
                           </TableCell>
                           <TableCell>
                             {renderPhotoCell('Start odometer photo', row.start_photo_url, row.start_photo_error, row.start_photo_path, 'start')}

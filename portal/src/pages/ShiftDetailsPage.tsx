@@ -12,6 +12,7 @@ import { fetchShiftWithEvents, type Shift, type ShiftEvent, type ShiftFull } fro
 import { supabase } from '@/lib/supabase';
 import { getOdometerPhotoUrl } from '@/lib/storage/odometerPhotos';
 import { formatPerthDateTime, PERTH_TIME_LABEL } from '@/lib/dateTime';
+import { computeWorkingSeconds, summarizeBreakAllowance } from '@/lib/breakAllowance';
 
 function formatTimestamp(value?: string | null) {
   if (!value) return '—';
@@ -40,7 +41,10 @@ function eventLabel(eventType: string) {
 
 function eventDetails(event: ShiftEvent) {
   if (event.event_type === 'location' && event.latitude != null && event.longitude != null) {
-    return `${event.latitude.toFixed(5)}, ${event.longitude.toFixed(5)}`;
+    const flagged = isLikelyDefaultCoordinate(event.latitude, event.longitude);
+    return flagged
+      ? `${event.latitude.toFixed(5)}, ${event.longitude.toFixed(5)} (Invalid/default coordinate)`
+      : `${event.latitude.toFixed(5)}, ${event.longitude.toFixed(5)}`;
   }
 
   if (event.metadata && typeof event.metadata === 'object') {
@@ -63,24 +67,6 @@ type ChecklistDisplayItem = {
   statusLabel: string;
   valueLabel: string | null;
   notes: string | null;
-};
-
-type BreakSession = {
-  startAt: string;
-  endAt: string | null;
-  durationSeconds: number;
-  isOpen: boolean;
-};
-
-type BreakSummaryStatus = 'none' | 'on-break' | 'completed';
-
-type BreakSummary = {
-  status: BreakSummaryStatus;
-  sessions: BreakSession[];
-  totalBreakSeconds: number;
-  currentBreakSeconds: number | null;
-  latestBreakStartAt: string | null;
-  latestBreakEndAt: string | null;
 };
 
 const CHECKLIST_EVENT_TYPES = ['checklist_submitted', 'checklist_completed', 'shift_checklist_submitted'];
@@ -111,6 +97,25 @@ const toNumber = (value: unknown): number | null => {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+};
+
+const isLikelyDefaultCoordinate = (latitude?: number | null, longitude?: number | null) => {
+  if (latitude == null || longitude == null) return false;
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return true;
+
+  const nearGoogleHq = Math.abs(lat - 37.422) <= 0.005 && Math.abs(lng - -122.084) <= 0.005;
+  const invalidRange = lat < -90 || lat > 90 || lng < -180 || lng > 180;
+  const zeroCoordinate = Math.abs(lat) < 0.00001 && Math.abs(lng) < 0.00001;
+
+  return nearGoogleHq || invalidRange || zeroCoordinate;
+};
+
+const formatCoordinateText = (latitude?: number | null, longitude?: number | null) => {
+  if (latitude == null || longitude == null) return 'Pending';
+  const coords = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+  return isLikelyDefaultCoordinate(latitude, longitude) ? `${coords} (Invalid/default coordinate)` : coords;
 };
 
 const parseChecklistStatus = (value: unknown): ChecklistDisplayStatus => {
@@ -160,7 +165,32 @@ const getChecklistAnswersFromMetadata = (metadata: Record<string, unknown> | nul
   if (isRecord(directAnswers)) return directAnswers;
   const directChecklist = metadata.checklist;
   if (isRecord(directChecklist)) return directChecklist;
+  const checklistSnapshot = metadata.checklist_snapshot;
+  if (isRecord(checklistSnapshot)) return checklistSnapshot;
+  const checklistPayload = metadata.checklist_payload;
+  if (isRecord(checklistPayload)) return checklistPayload;
   return null;
+};
+
+const mergeChecklistSources = (
+  primary: Record<string, unknown> | null,
+  secondary: Shift['checklist'] | null | undefined
+): ChecklistDisplayItem[] => {
+  const merged = new Map<string, unknown>();
+
+  if (isRecord(secondary)) {
+    Object.entries(secondary).forEach(([key, value]) => {
+      merged.set(key, value);
+    });
+  }
+
+  if (isRecord(primary)) {
+    Object.entries(primary).forEach(([key, value]) => {
+      merged.set(key, value);
+    });
+  }
+
+  return Array.from(merged.entries()).map(([key, value]) => getChecklistItem(key, value));
 };
 
 const getLatestChecklistEvent = (events: ShiftEvent[]): ShiftEvent | null => {
@@ -189,85 +219,50 @@ const formatDuration = (totalSeconds: number | null | undefined) => {
   return `${remainingSeconds}s`;
 };
 
-const getBreakSummary = (events: ShiftEvent[]): BreakSummary => {
-  const breakEvents = events
-    .filter((event) => event.event_type === 'break_start' || event.event_type === 'break_end')
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+const buildCondensedTimeline = (events: ShiftEvent[]): ShiftEvent[] => {
+  if (events.length === 0) return [];
 
-  if (breakEvents.length === 0) {
-    return {
-      status: 'none',
-      sessions: [],
-      totalBreakSeconds: 0,
-      currentBreakSeconds: null,
-      latestBreakStartAt: null,
-      latestBreakEndAt: null,
-    };
-  }
+  const sorted = [...events].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const condensed: ShiftEvent[] = [];
+  let locationBuffer: ShiftEvent[] = [];
 
-  const sessions: BreakSession[] = [];
-  let openBreakStartAt: string | null = null;
-  let totalBreakSeconds = 0;
-  let latestBreakStartAt: string | null = null;
-  let latestBreakEndAt: string | null = null;
+  const flushLocationBuffer = () => {
+    if (locationBuffer.length === 0) return;
+    const first = locationBuffer[0];
+    const last = locationBuffer[locationBuffer.length - 1];
 
-  breakEvents.forEach((event) => {
-    const eventMs = new Date(event.created_at).getTime();
-    if (Number.isNaN(eventMs)) return;
+    if (locationBuffer.length <= 2) {
+      condensed.push(...locationBuffer);
+    } else {
+      condensed.push(first);
+      condensed.push({
+        ...last,
+        id: `${last.id}-summary`,
+        event_type: 'location_summary',
+        metadata: {
+          count: locationBuffer.length,
+          first_at: first.created_at,
+          last_at: last.created_at,
+        },
+      });
+      condensed.push(last);
+    }
 
-    if (event.event_type === 'break_start') {
-      openBreakStartAt = event.created_at;
-      latestBreakStartAt = event.created_at;
+    locationBuffer = [];
+  };
+
+  sorted.forEach((event) => {
+    if (event.event_type === 'location') {
+      locationBuffer.push(event);
       return;
     }
 
-    latestBreakEndAt = event.created_at;
-
-    if (!openBreakStartAt) {
-      return;
-    }
-
-    const startMs = new Date(openBreakStartAt).getTime();
-    if (Number.isNaN(startMs)) {
-      openBreakStartAt = null;
-      return;
-    }
-
-    const durationSeconds = Math.max(0, Math.floor((eventMs - startMs) / 1000));
-    sessions.push({
-      startAt: openBreakStartAt,
-      endAt: event.created_at,
-      durationSeconds,
-      isOpen: false,
-    });
-    totalBreakSeconds += durationSeconds;
-    openBreakStartAt = null;
+    flushLocationBuffer();
+    condensed.push(event);
   });
 
-  let currentBreakSeconds: number | null = null;
-
-  if (openBreakStartAt) {
-    const startMs = new Date(openBreakStartAt).getTime();
-    if (!Number.isNaN(startMs)) {
-      currentBreakSeconds = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
-      totalBreakSeconds += currentBreakSeconds;
-      sessions.push({
-        startAt: openBreakStartAt,
-        endAt: null,
-        durationSeconds: currentBreakSeconds,
-        isOpen: true,
-      });
-    }
-  }
-
-  return {
-    status: openBreakStartAt ? 'on-break' : 'completed',
-    sessions,
-    totalBreakSeconds,
-    currentBreakSeconds,
-    latestBreakStartAt,
-    latestBreakEndAt,
-  };
+  flushLocationBuffer();
+  return condensed;
 };
 
 function dotHtml(color: string, size = 12, glow = false): string {
@@ -502,13 +497,14 @@ export function ShiftDetailsPage() {
     const eventAnswers = getChecklistAnswersFromMetadata(
       isRecord(latestChecklistEvent?.metadata) ? latestChecklistEvent.metadata : null
     );
-    if (isRecord(eventAnswers)) {
-      return Object.entries(eventAnswers).map(([key, value]) => getChecklistItem(key, value));
-    }
-
-    return normalizeChecklist(shift?.checklist as Shift['checklist']);
+    return mergeChecklistSources(eventAnswers, shift?.checklist as Shift['checklist']);
   }, [latestChecklistEvent, shift]);
-  const breakSummary = useMemo(() => getBreakSummary(events), [events]);
+  const breakSummary = useMemo(() => summarizeBreakAllowance(events), [events]);
+  const workingSeconds = useMemo(
+    () => computeWorkingSeconds(shift?.started_at ?? null, shift?.ended_at ?? null, breakSummary),
+    [shift?.started_at, shift?.ended_at, breakSummary],
+  );
+  const timelineEvents = useMemo(() => buildCondensedTimeline(events), [events]);
 
   useEffect(() => {
     if (!mapRef.current || !shift || locationEvents.length === 0) {
@@ -726,13 +722,21 @@ export function ShiftDetailsPage() {
                   <p className="text-sm text-gray-500">No events found</p>
                 ) : (
                   <div className="space-y-2">
-                    {events.map((event) => (
+                    {timelineEvents.map((event) => (
                       <div key={event.id} className="rounded-lg border border-gray-800 bg-[#0F0F0F] px-3 py-2">
                         <div className="flex items-center justify-between gap-4">
-                          <p className="text-sm text-gray-200">{eventLabel(event.event_type)}</p>
+                          <p className="text-sm text-gray-200">
+                            {event.event_type === 'location_summary'
+                              ? `${(isRecord(event.metadata) ? toNumber(event.metadata.count) : null) ?? 0} location updates`
+                              : eventLabel(event.event_type)}
+                          </p>
                           <p className="text-xs text-gray-500">{formatTimestamp(event.created_at)}</p>
                         </div>
-                        {eventDetails(event) && <p className="mt-1 text-xs text-gray-400">{eventDetails(event)}</p>}
+                        {event.event_type === 'location_summary' ? (
+                          <p className="mt-1 text-xs text-gray-400">Location updates condensed for readability.</p>
+                        ) : eventDetails(event) ? (
+                          <p className="mt-1 text-xs text-gray-400">{eventDetails(event)}</p>
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -762,7 +766,9 @@ export function ShiftDetailsPage() {
                       <p className="text-gray-200 text-sm">
                         {shiftOdometer.end?.value != null
                           ? `${Math.round(shiftOdometer.end.value).toLocaleString()} ${shiftOdometer.end.unit ?? 'km'}`
-                          : 'Pending'}
+                          : shift?.ended_at
+                            ? 'Missing end odometer'
+                            : 'Pending'}
                       </p>
                       <p className="mt-1 text-[11px] text-gray-500">{formatTimestamp(shiftOdometer.end?.created_at)}</p>
                     </div>
@@ -770,8 +776,12 @@ export function ShiftDetailsPage() {
                       <p className="text-gray-500">Distance</p>
                       <p className="text-gray-200 text-sm">
                         {shiftOdometer.distanceDriven != null
-                          ? `${Math.round(shiftOdometer.distanceDriven).toLocaleString()} km`
-                          : 'Pending'}
+                          ? shiftOdometer.distanceDriven < 0
+                            ? 'Invalid odometer'
+                            : `${Math.round(shiftOdometer.distanceDriven).toLocaleString()} km`
+                          : shift?.ended_at
+                            ? 'Missing end odometer'
+                            : 'Pending'}
                       </p>
                     </div>
                     <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
@@ -783,17 +793,13 @@ export function ShiftDetailsPage() {
                     <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
                       <p className="text-gray-500">Start Location</p>
                       <p className="text-gray-200 text-sm">
-                        {shiftOdometer.start?.latitude != null && shiftOdometer.start?.longitude != null
-                          ? `${shiftOdometer.start.latitude.toFixed(5)}, ${shiftOdometer.start.longitude.toFixed(5)}`
-                          : 'Pending'}
+                        {formatCoordinateText(shiftOdometer.start?.latitude, shiftOdometer.start?.longitude)}
                       </p>
                     </div>
                     <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
                       <p className="text-gray-500">End Location</p>
                       <p className="text-gray-200 text-sm">
-                        {shiftOdometer.end?.latitude != null && shiftOdometer.end?.longitude != null
-                          ? `${shiftOdometer.end.latitude.toFixed(5)}, ${shiftOdometer.end.longitude.toFixed(5)}`
-                          : 'Pending'}
+                        {formatCoordinateText(shiftOdometer.end?.latitude, shiftOdometer.end?.longitude)}
                       </p>
                     </div>
                   </div>
@@ -857,16 +863,26 @@ export function ShiftDetailsPage() {
                     <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
                       <p className="text-gray-500">Break status</p>
                       <p className="mt-1 text-sm text-gray-200">
-                        {breakSummary.status === 'none'
-                          ? 'No break taken'
-                          : breakSummary.status === 'on-break'
-                            ? 'On break'
-                            : 'Completed'}
+                        {breakSummary.isOnBreak
+                          ? 'On break'
+                          : breakSummary.rawBreakSeconds > 0
+                            ? 'Completed'
+                            : 'No break taken'}
                       </p>
                     </div>
                     <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
-                      <p className="text-gray-500">Total break time</p>
-                      <p className="mt-1 text-sm text-gray-200">{formatDuration(breakSummary.totalBreakSeconds)}</p>
+                      <p className="text-gray-500">Raw break time taken</p>
+                      <p className="mt-1 text-sm text-gray-200">{formatDuration(breakSummary.rawBreakSeconds)}</p>
+                    </div>
+                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                      <p className="text-gray-500">Allowed break time</p>
+                      <p className="mt-1 text-sm text-gray-200">{formatDuration(breakSummary.allowanceSeconds)}</p>
+                    </div>
+                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                      <p className="text-gray-500">Allowance status</p>
+                      <p className={`mt-1 text-sm ${breakSummary.status === 'exceeded' ? 'text-red-400' : 'text-green-400'}`}>
+                        {breakSummary.status === 'exceeded' ? 'Exceeded allowance' : 'Within allowance'}
+                      </p>
                     </div>
                     <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
                       <p className="text-gray-500">Break start time</p>
@@ -877,9 +893,9 @@ export function ShiftDetailsPage() {
                       <p className="mt-1 text-sm text-gray-200">{formatTimestamp(breakSummary.latestBreakEndAt)}</p>
                     </div>
                     <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
-                      <p className="text-gray-500">Break duration</p>
+                      <p className="text-gray-500">Current/last break duration</p>
                       <p className="mt-1 text-sm text-gray-200">
-                        {breakSummary.status === 'on-break'
+                        {breakSummary.isOnBreak
                           ? formatDuration(breakSummary.currentBreakSeconds)
                           : breakSummary.sessions.length > 0
                             ? formatDuration(breakSummary.sessions[breakSummary.sessions.length - 1]?.durationSeconds)
@@ -887,10 +903,32 @@ export function ShiftDetailsPage() {
                       </p>
                     </div>
                     <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                      <p className="text-gray-500">Working time (minus max 30m break)</p>
+                      <p className="mt-1 text-sm text-gray-200">{formatDuration(workingSeconds)}</p>
+                    </div>
+                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
                       <p className="text-gray-500">Break sessions</p>
                       <p className="mt-1 text-sm text-gray-200">{breakSummary.sessions.length}</p>
                     </div>
                   </div>
+
+                  {breakSummary.blockMessage && (
+                    <div className="rounded bg-amber-950/40 border border-amber-800 p-2 text-xs text-amber-300">
+                      {breakSummary.blockMessage}
+                    </div>
+                  )}
+
+                  {breakSummary.shouldAutoEndCurrentBreak && (
+                    <div className="rounded bg-red-950/40 border border-red-800 p-2 text-xs text-red-300">
+                      Break allowance reached while on break. Current break should be auto-ended.
+                    </div>
+                  )}
+
+                  {breakSummary.status === 'exceeded' && (
+                    <div className="rounded bg-red-950/40 border border-red-800 p-2 text-xs text-red-300">
+                      Break exceeded by {formatDuration(breakSummary.exceededBySeconds)}.
+                    </div>
+                  )}
 
                   {breakSummary.sessions.length === 0 ? (
                     <p className="text-xs text-gray-500">No break taken</p>

@@ -75,6 +75,68 @@ const toRecord = (value: unknown): Record<string, unknown> | null => {
   return null;
 };
 
+const resolveKmFields = ({
+  viewRow,
+  maintenanceMetadata,
+}: {
+  viewRow?: Record<string, unknown> | null;
+  maintenanceMetadata?: Record<string, unknown> | null;
+}) => {
+  const currentKm =
+    toNumber(maintenanceMetadata?.current_km) ??
+    toNumber(maintenanceMetadata?.current_odometer) ??
+    toNumber(maintenanceMetadata?.current_odometer_km) ??
+    toNumber(viewRow?.current_km) ??
+    toNumber(viewRow?.current_odometer);
+
+  const targetServiceKm =
+    toNumber(maintenanceMetadata?.target_service_km) ??
+    toNumber(maintenanceMetadata?.next_service_km) ??
+    toNumber(maintenanceMetadata?.next_service_odometer) ??
+    toNumber(maintenanceMetadata?.service_due_km) ??
+    toNumber(viewRow?.next_service_km) ??
+    toNumber(viewRow?.service_due_km) ??
+    toNumber(viewRow?.next_service_odometer);
+
+  const kmRemaining =
+    toNumber(maintenanceMetadata?.km_remaining) ??
+    toNumber(viewRow?.km_remaining) ??
+    (currentKm != null && targetServiceKm != null ? targetServiceKm - currentKm : null);
+
+  return {
+    currentKm,
+    targetServiceKm,
+    kmRemaining,
+  };
+};
+
+const isUnauthorizedError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false;
+
+  const maybeError = error as {
+    status?: number | string;
+    code?: string | number;
+    message?: string;
+    details?: string;
+  };
+
+  const status =
+    typeof maybeError.status === 'string'
+      ? Number(maybeError.status)
+      : maybeError.status;
+
+  if (status === 401 || status === 403) return true;
+  if (maybeError.code === '401' || maybeError.code === '403' || maybeError.code === '42501') return true;
+
+  const message = `${maybeError.message ?? ''} ${maybeError.details ?? ''}`.toLowerCase();
+  return (
+    message.includes('unauthorized') ||
+    message.includes('not authenticated') ||
+    message.includes('jwt') ||
+    message.includes('permission denied')
+  );
+};
+
 const mapAlertRow = (row: Record<string, unknown>): MaintenanceAlert => {
   const metadata = toRecord(row.metadata);
 
@@ -210,23 +272,63 @@ export async function listServiceAlerts(): Promise<ServiceAlert[]> {
     .from('vehicle_service_alerts')
     .select('*');
 
-  if (error) throw error;
+  if (error) {
+    if (isUnauthorizedError(error)) {
+      return [];
+    }
+    throw error;
+  }
 
-  return (data ?? []).map((row: Record<string, unknown>) => ({
-    maintenance_item_id: toText(row.maintenance_item_id),
-    vehicle_id: toText(row.vehicle_id),
-    vehicle_rego: toText(row.vehicle_rego) ?? toText(row.rego),
-    current_km: toNumber(row.current_km) ?? toNumber(row.current_odometer),
-    next_service_km: toNumber(row.next_service_km) ?? toNumber(row.service_due_km),
-    km_remaining: toNumber(row.km_remaining),
-    status: toText(row.status),
-  }));
+  const serviceAlertRows = (data ?? []) as Record<string, unknown>[];
+
+  const maintenanceItemIds = Array.from(
+    new Set(
+      serviceAlertRows
+        .map((row) => toText(row.maintenance_item_id))
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+
+  const maintenanceMetadataById = new Map<string, Record<string, unknown> | null>();
+
+  if (maintenanceItemIds.length > 0) {
+    const { data: maintenanceRows, error: maintenanceItemsError } = await supabase
+      .from('maintenance_items')
+      .select('id, metadata')
+      .in('id', maintenanceItemIds);
+
+    if (maintenanceItemsError && !isUnauthorizedError(maintenanceItemsError)) {
+      throw maintenanceItemsError;
+    }
+
+    ((maintenanceRows ?? []) as Record<string, unknown>[]).forEach((row) => {
+      const id = toText(row.id);
+      if (!id) return;
+      maintenanceMetadataById.set(id, toRecord(row.metadata));
+    });
+  }
+
+  return serviceAlertRows.map((row: Record<string, unknown>) => {
+    const maintenanceItemId = toText(row.maintenance_item_id);
+    const metadata = maintenanceItemId ? maintenanceMetadataById.get(maintenanceItemId) ?? null : null;
+    const km = resolveKmFields({ viewRow: row, maintenanceMetadata: metadata });
+
+    return {
+      maintenance_item_id: maintenanceItemId,
+      vehicle_id: toText(row.vehicle_id),
+      vehicle_rego: toText(row.vehicle_rego) ?? toText(row.rego),
+      current_km: km.currentKm,
+      next_service_km: km.targetServiceKm,
+      km_remaining: km.kmRemaining,
+      status: toText(row.status),
+    };
+  });
 }
 
 export async function listAdminInboxNotifications(): Promise<AdminInboxNotification[]> {
   const { data: maintenanceRows, error: maintenanceError } = await supabase
     .from('maintenance_items')
-    .select('id, vehicle_id, created_at, status, service_type, acknowledged_at')
+    .select('id, vehicle_id, created_at, status, service_type, acknowledged_at, metadata')
     .eq('status', 'due')
     .eq('service_type', 'Scheduled Service')
     .is('acknowledged_at', null)
@@ -260,27 +362,33 @@ export async function listAdminInboxNotifications(): Promise<AdminInboxNotificat
       : Promise.resolve({ data: [], error: null }),
   ]);
 
-  if (serviceAlertResponse.error) throw serviceAlertResponse.error;
-  if (vehicleResponse.error) throw vehicleResponse.error;
+  if (serviceAlertResponse.error && !isUnauthorizedError(serviceAlertResponse.error)) {
+    throw serviceAlertResponse.error;
+  }
+  if (vehicleResponse.error && !isUnauthorizedError(vehicleResponse.error)) {
+    throw vehicleResponse.error;
+  }
 
   const alertsByMaintenanceId = new Map<string, ServiceAlert>();
-  ((serviceAlertResponse.data ?? []) as Record<string, unknown>[]).forEach((row) => {
+  ((serviceAlertResponse.error ? [] : serviceAlertResponse.data ?? []) as Record<string, unknown>[]).forEach((row) => {
     const maintenanceItemId = toText(row.maintenance_item_id);
     if (!maintenanceItemId) return;
+
+    const km = resolveKmFields({ viewRow: row, maintenanceMetadata: null });
 
     alertsByMaintenanceId.set(maintenanceItemId, {
       maintenance_item_id: maintenanceItemId,
       vehicle_id: toText(row.vehicle_id),
       vehicle_rego: toText(row.vehicle_rego) ?? toText(row.rego),
-      current_km: toNumber(row.current_km) ?? toNumber(row.current_odometer),
-      next_service_km: toNumber(row.next_service_km) ?? toNumber(row.service_due_km),
-      km_remaining: toNumber(row.km_remaining),
+      current_km: km.currentKm,
+      next_service_km: km.targetServiceKm,
+      km_remaining: km.kmRemaining,
       status: toText(row.status),
     });
   });
 
   const regoByVehicleId = new Map<string, string>();
-  ((vehicleResponse.data ?? []) as Record<string, unknown>[]).forEach((row) => {
+  ((vehicleResponse.error ? [] : vehicleResponse.data ?? []) as Record<string, unknown>[]).forEach((row) => {
     const id = toText(row.id);
     const rego = toText(row.rego);
     if (id && rego) {
@@ -292,14 +400,23 @@ export async function listAdminInboxNotifications(): Promise<AdminInboxNotificat
     const maintenanceItemId = toText(row.id) ?? String(row.id);
     const vehicleId = toText(row.vehicle_id);
     const alert = alertsByMaintenanceId.get(maintenanceItemId);
+    const rowMetadata = toRecord(row.metadata);
+    const km = resolveKmFields({
+      viewRow: {
+        current_km: alert?.current_km,
+        next_service_km: alert?.next_service_km,
+        km_remaining: alert?.km_remaining,
+      },
+      maintenanceMetadata: rowMetadata,
+    });
 
     return {
       maintenance_item_id: maintenanceItemId,
       vehicle_id: vehicleId,
       vehicle_rego: alert?.vehicle_rego ?? (vehicleId ? regoByVehicleId.get(vehicleId) ?? null : null),
-      current_km: alert?.current_km ?? null,
-      target_service_km: alert?.next_service_km ?? null,
-      km_remaining: alert?.km_remaining ?? null,
+      current_km: km.currentKm,
+      target_service_km: km.targetServiceKm,
+      km_remaining: km.kmRemaining,
       created_at: toText(row.created_at) ?? new Date().toISOString(),
     };
   });

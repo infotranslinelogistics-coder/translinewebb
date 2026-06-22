@@ -6,11 +6,161 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Badge } from '@/app/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
-import { Settings as SettingsIcon, User, Database, Shield, Bell, CheckCircle, XCircle } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { User, Database, Shield, Bell, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+
+const NOTIFICATION_PREFS_KEY = 'transline.notificationPrefs';
+
+const EMAIL_NOTIFICATIONS = [
+  'Vehicle maintenance due',
+  'Driver incident reports',
+  'System alerts',
+  'Daily summary reports',
+] as const;
+
+const PUSH_NOTIFICATIONS = [
+  'Critical alerts',
+  'New driver logs',
+  'Shift start/end',
+  'Maintenance overdue',
+] as const;
+
+type ConnectionStatus = 'checking' | 'connected' | 'disconnected';
+
+function defaultNotificationPrefs(): Record<string, boolean> {
+  const prefs: Record<string, boolean> = {};
+  EMAIL_NOTIFICATIONS.forEach((item) => {
+    prefs[item] = true;
+  });
+  PUSH_NOTIFICATIONS.forEach((item) => {
+    prefs[item] = item === 'Critical alerts';
+  });
+  return prefs;
+}
+
+function loadNotificationPrefs(): Record<string, boolean> {
+  const defaults = defaultNotificationPrefs();
+  try {
+    const raw = localStorage.getItem(NOTIFICATION_PREFS_KEY);
+    if (!raw) return defaults;
+    const stored = JSON.parse(raw) as Record<string, boolean>;
+    return { ...defaults, ...stored };
+  } catch (error) {
+    console.error('Failed to read notification preferences:', error);
+    return defaults;
+  }
+}
 
 export function SettingsPage() {
   const { user } = useAuth();
-  const [supabaseConnected] = React.useState(false); // Mock - check actual connection
+
+  // Real Supabase connection status (replaces the previous hardcoded mock).
+  const [supabaseStatus, setSupabaseStatus] = React.useState<ConnectionStatus>('checking');
+
+  // Password change form state.
+  const [currentPassword, setCurrentPassword] = React.useState('');
+  const [newPassword, setNewPassword] = React.useState('');
+  const [confirmPassword, setConfirmPassword] = React.useState('');
+  const [passwordSaving, setPasswordSaving] = React.useState(false);
+  const [passwordError, setPasswordError] = React.useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = React.useState<string | null>(null);
+
+  // Notification preferences state (persisted to localStorage).
+  const [notificationPrefs, setNotificationPrefs] = React.useState<Record<string, boolean>>(() =>
+    loadNotificationPrefs()
+  );
+  const [prefsSaved, setPrefsSaved] = React.useState(false);
+
+  const supabaseConnected = supabaseStatus === 'connected';
+
+  // Check the live database/auth connection on mount.
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { error } = await supabase.auth.getUser();
+        if (cancelled) return;
+        setSupabaseStatus(error ? 'disconnected' : 'connected');
+      } catch (error) {
+        console.error('Supabase connection check failed:', error);
+        if (!cancelled) setSupabaseStatus('disconnected');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleUpdatePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('Please fill in all password fields.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirmation do not match.');
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError('New password must be different from the current password.');
+      return;
+    }
+    if (!user?.email) {
+      setPasswordError('No authenticated admin account found. Please sign in again.');
+      return;
+    }
+
+    try {
+      setPasswordSaving(true);
+
+      // Verify the current password by re-authenticating before changing it.
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+      if (signInError) {
+        setPasswordError('Current password is incorrect.');
+        return;
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (updateError) throw updateError;
+
+      setPasswordSuccess('Password updated successfully.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      setPasswordError(
+        err?.message ? `Failed to update password: ${err.message}` : 'Failed to update password.'
+      );
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  const toggleNotification = (item: string) => {
+    setPrefsSaved(false);
+    setNotificationPrefs((prev) => ({ ...prev, [item]: !prev[item] }));
+  };
+
+  const handleSavePreferences = () => {
+    try {
+      localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(notificationPrefs));
+      setPrefsSaved(true);
+    } catch (error) {
+      console.error('Failed to save notification preferences:', error);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -32,61 +182,84 @@ export function SettingsPage() {
               Update your admin account information
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-white">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={user?.email || ''}
-                disabled
-                className="bg-[#0F0F0F] border-gray-700 text-gray-400"
-              />
-            </div>
+          <CardContent>
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-white">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={user?.email || ''}
+                  disabled
+                  className="bg-[#0F0F0F] border-gray-700 text-gray-400"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="role" className="text-white">Role</Label>
-              <Input
-                id="role"
-                value="Administrator"
-                disabled
-                className="bg-[#0F0F0F] border-gray-700 text-gray-400"
-              />
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="role" className="text-white">Role</Label>
+                <Input
+                  id="role"
+                  value="Administrator"
+                  disabled
+                  className="bg-[#0F0F0F] border-gray-700 text-gray-400"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="current-password" className="text-white">Current Password</Label>
-              <Input
-                id="current-password"
-                type="password"
-                placeholder="••••••••"
-                className="bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
-              />
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="current-password" className="text-white">Current Password</Label>
+                <Input
+                  id="current-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="new-password" className="text-white">New Password</Label>
-              <Input
-                id="new-password"
-                type="password"
-                placeholder="••••••••"
-                className="bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
-              />
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-password" className="text-white">New Password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="confirm-password" className="text-white">Confirm New Password</Label>
-              <Input
-                id="confirm-password"
-                type="password"
-                placeholder="••••••••"
-                className="bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
-              />
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password" className="text-white">Confirm New Password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
+                />
+              </div>
 
-            <Button className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white">
-              Update Password
-            </Button>
+              {passwordError && (
+                <p className="text-sm text-red-400">{passwordError}</p>
+              )}
+              {passwordSuccess && (
+                <p className="text-sm text-green-400">{passwordSuccess}</p>
+              )}
+
+              <Button
+                type="submit"
+                disabled={passwordSaving}
+                className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
+              >
+                {passwordSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {passwordSaving ? 'Updating...' : 'Update Password'}
+              </Button>
+            </form>
           </CardContent>
         </Card>
 
@@ -108,25 +281,32 @@ export function SettingsPage() {
                   <p className="text-sm font-medium text-white">Supabase</p>
                   <p className="text-xs text-gray-500">Database connection</p>
                 </div>
-                <Badge
-                  className={
-                    supabaseConnected
-                      ? 'bg-green-950 text-green-400 border-green-900'
-                      : 'bg-red-950 text-red-400 border-red-900'
-                  }
-                >
-                  {supabaseConnected ? (
-                    <>
-                      <CheckCircle className="w-3 h-3 mr-1" />
-                      Connected
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="w-3 h-3 mr-1" />
-                      Not Connected
-                    </>
-                  )}
-                </Badge>
+                {supabaseStatus === 'checking' ? (
+                  <Badge className="bg-gray-800 text-gray-400 border-gray-700">
+                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    Checking
+                  </Badge>
+                ) : (
+                  <Badge
+                    className={
+                      supabaseConnected
+                        ? 'bg-green-950 text-green-400 border-green-900'
+                        : 'bg-red-950 text-red-400 border-red-900'
+                    }
+                  >
+                    {supabaseConnected ? (
+                      <>
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Connected
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-3 h-3 mr-1" />
+                        Not Connected
+                      </>
+                    )}
+                  </Badge>
+                )}
               </div>
 
               <div className="flex items-center justify-between">
@@ -196,16 +376,12 @@ export function SettingsPage() {
             <div className="space-y-4">
               <h3 className="text-sm font-medium text-white">Email Notifications</h3>
               <div className="space-y-3">
-                {[
-                  'Vehicle maintenance due',
-                  'Driver incident reports',
-                  'System alerts',
-                  'Daily summary reports',
-                ].map((item) => (
+                {EMAIL_NOTIFICATIONS.map((item) => (
                   <label key={item} className="flex items-center gap-3 cursor-pointer">
                     <input
                       type="checkbox"
-                      defaultChecked
+                      checked={!!notificationPrefs[item]}
+                      onChange={() => toggleNotification(item)}
                       className="w-4 h-4 rounded border-gray-700 bg-[#0F0F0F] text-[#FF6B35] focus:ring-[#FF6B35]"
                     />
                     <span className="text-sm text-gray-300">{item}</span>
@@ -217,16 +393,12 @@ export function SettingsPage() {
             <div className="space-y-4">
               <h3 className="text-sm font-medium text-white">Push Notifications</h3>
               <div className="space-y-3">
-                {[
-                  'Critical alerts',
-                  'New driver logs',
-                  'Shift start/end',
-                  'Maintenance overdue',
-                ].map((item) => (
+                {PUSH_NOTIFICATIONS.map((item) => (
                   <label key={item} className="flex items-center gap-3 cursor-pointer">
                     <input
                       type="checkbox"
-                      defaultChecked={item === 'Critical alerts'}
+                      checked={!!notificationPrefs[item]}
+                      onChange={() => toggleNotification(item)}
                       className="w-4 h-4 rounded border-gray-700 bg-[#0F0F0F] text-[#FF6B35] focus:ring-[#FF6B35]"
                     />
                     <span className="text-sm text-gray-300">{item}</span>
@@ -236,16 +408,22 @@ export function SettingsPage() {
             </div>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-gray-800">
-            <Button className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white">
+          <div className="mt-6 pt-6 border-t border-gray-800 flex items-center gap-4">
+            <Button
+              onClick={handleSavePreferences}
+              className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
+            >
               Save Preferences
             </Button>
+            {prefsSaved && (
+              <span className="text-sm text-green-400">Preferences saved.</span>
+            )}
           </div>
         </CardContent>
       </Card>
 
       {/* Database Setup Instructions */}
-      {!supabaseConnected && (
+      {supabaseStatus === 'disconnected' && (
         <Card className="bg-[#161616] border-yellow-900/50 border-2">
           <CardHeader>
             <CardTitle className="text-yellow-400">Supabase Setup Required</CardTitle>

@@ -12,6 +12,7 @@ import { Search, Clock, Loader } from 'lucide-react';
 import { listShifts, Shift, countActiveShifts, countTodayShifts } from '@/lib/db/shifts';
 import { supabase } from '@/lib/supabase';
 import { formatPerthDateTime, PERTH_TIME_LABEL } from '@/lib/dateTime';
+import { computeWorkingSeconds, summarizeBreakAllowance } from '@/lib/breakAllowance';
 
 const formatChecklistLabel = (key: string) =>
   key
@@ -57,16 +58,6 @@ type ChecklistSummary = {
   answerCount: number;
   hasFailures: boolean | null;
 };
-
-type BreakSummary = {
-  allowanceSeconds: number;
-  usedSeconds: number;
-  remainingSeconds: number;
-  isOnBreak: boolean;
-  latestBreakAt: string | null;
-};
-
-const BREAK_ALLOWANCE_SECONDS = 30 * 60;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -235,10 +226,20 @@ const getLocationSummary = (metadata: Record<string, unknown> | null | undefined
   const lng = metadata.lng ?? metadata.longitude;
   const speed = metadata.speed;
   if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+  const isDefaultGps = Math.abs(lat - 37.422) <= 0.005 && Math.abs(lng - -122.084) <= 0.005;
+  const suffix = isDefaultGps ? ' (Invalid/default coordinate)' : '';
   if (typeof speed === 'number') {
-    return `${lat.toFixed(5)}, ${lng.toFixed(5)} (${speed} km/h)`;
+    return `${lat.toFixed(5)}, ${lng.toFixed(5)} (${speed} km/h)${suffix}`;
   }
-  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}${suffix}`;
+};
+
+const isLikelyDefaultCoordinate = (lat?: number | null, lng?: number | null) => {
+  if (lat == null || lng == null) return false;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return true;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return true;
+  if (Math.abs(lat) < 0.00001 && Math.abs(lng) < 0.00001) return true;
+  return Math.abs(lat - 37.422) <= 0.005 && Math.abs(lng - -122.084) <= 0.005;
 };
 
 const getEventLabel = (eventType: string) => {
@@ -263,6 +264,44 @@ const getEventLabel = (eventType: string) => {
 
 const buildTimeline = (shift: Shift, events: ShiftEvent[]): TimelineItem[] => {
   const timeline: TimelineItem[] = [];
+  let locationBuffer: ShiftEvent[] = [];
+
+  const flushLocationBuffer = () => {
+    if (locationBuffer.length === 0) return;
+
+    const first = locationBuffer[0];
+    const last = locationBuffer[locationBuffer.length - 1];
+    const firstMetadata = isRecord(first.metadata) ? first.metadata : null;
+    const lastMetadata = isRecord(last.metadata) ? last.metadata : null;
+
+    if (locationBuffer.length <= 2) {
+      locationBuffer.forEach((event, index) => {
+        const metadata = isRecord(event.metadata) ? event.metadata : null;
+        timeline.push({
+          id: event.id ?? `${event.shift_id}-${event.event_type}-${event.created_at}-${index}`,
+          eventType: event.event_type,
+          label: getEventLabel(event.event_type),
+          timestamp: event.created_at,
+          details: getLocationSummary(metadata) ?? undefined,
+        });
+      });
+    } else {
+      timeline.push({
+        id: `${shift.id}-location-summary-${last.created_at}`,
+        eventType: 'location_summary',
+        label: `${locationBuffer.length} location updates`,
+        timestamp: last.created_at,
+        details: [
+          getLocationSummary(firstMetadata),
+          getLocationSummary(lastMetadata),
+        ]
+          .filter(Boolean)
+          .join(' -> ') || 'Location updates condensed for readability.',
+      });
+    }
+
+    locationBuffer = [];
+  };
 
   if (shift.started_at) {
     timeline.push({
@@ -274,9 +313,16 @@ const buildTimeline = (shift: Shift, events: ShiftEvent[]): TimelineItem[] => {
   }
 
   events.forEach((event, index) => {
+    if (event.event_type === 'location') {
+      locationBuffer.push(event);
+      return;
+    }
+
+    flushLocationBuffer();
+
     const metadata = isRecord(event.metadata) ? event.metadata : null;
     const durationLabel = event.event_type === 'break_end' ? getMetadataDuration(metadata) : null;
-    const locationLabel = getLocationSummary(metadata);
+    const locationLabel = event.event_type === 'location' ? getLocationSummary(metadata) : null;
     const details = durationLabel
       ? `Duration: ${durationLabel}`
       : locationLabel ?? undefined;
@@ -289,6 +335,8 @@ const buildTimeline = (shift: Shift, events: ShiftEvent[]): TimelineItem[] => {
       details,
     });
   });
+
+  flushLocationBuffer();
 
   if (shift.ended_at) {
     timeline.push({
@@ -303,51 +351,21 @@ const buildTimeline = (shift: Shift, events: ShiftEvent[]): TimelineItem[] => {
   return timeline;
 };
 
-const getBreakSummary = (events: ShiftEvent[]): BreakSummary => {
-  const breakEvents = events
-    .filter((event) => event.event_type === 'break_start' || event.event_type === 'break_end')
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+const mergeChecklistSources = (
+  eventChecklist: Record<string, unknown> | null,
+  shiftChecklist: Shift['checklist'] | null | undefined,
+): ChecklistDisplayItem[] => {
+  const merged = new Map<string, unknown>();
 
-  let openBreakStart: number | null = null;
-  let totalSeconds = 0;
-
-  breakEvents.forEach((event) => {
-    const eventMs = new Date(event.created_at).getTime();
-    if (Number.isNaN(eventMs)) return;
-
-    if (event.event_type === 'break_start') {
-      openBreakStart = eventMs;
-      return;
-    }
-
-    if (openBreakStart != null) {
-      totalSeconds += Math.max(0, Math.floor((eventMs - openBreakStart) / 1000));
-      openBreakStart = null;
-      return;
-    }
-
-    const metadata = isRecord(event.metadata) ? event.metadata : null;
-    const fallbackDuration = getDurationSecondsFromMetadata(metadata);
-    if (fallbackDuration != null) {
-      totalSeconds += Math.floor(fallbackDuration);
-    }
-  });
-
-  const latestBreakEvent = breakEvents.length > 0 ? breakEvents[breakEvents.length - 1] : null;
-  const isOnBreak = latestBreakEvent?.event_type === 'break_start';
-  const latestBreakAt = latestBreakEvent?.created_at ?? null;
-
-  if (isOnBreak && openBreakStart != null) {
-    totalSeconds += Math.max(0, Math.floor((Date.now() - openBreakStart) / 1000));
+  if (isRecord(shiftChecklist)) {
+    Object.entries(shiftChecklist).forEach(([key, value]) => merged.set(key, value));
   }
 
-  return {
-    allowanceSeconds: BREAK_ALLOWANCE_SECONDS,
-    usedSeconds: totalSeconds,
-    remainingSeconds: Math.max(0, BREAK_ALLOWANCE_SECONDS - totalSeconds),
-    isOnBreak,
-    latestBreakAt,
-  };
+  if (isRecord(eventChecklist)) {
+    Object.entries(eventChecklist).forEach(([key, value]) => merged.set(key, value));
+  }
+
+  return Array.from(merged.entries()).map(([key, value]) => getChecklistItem(key, value));
 };
 
 export function ShiftsPage() {
@@ -551,8 +569,9 @@ export function ShiftsPage() {
   };
 
   const latestChecklistEvent = getLatestChecklistEvent(shiftEvents);
-  const checklistItems = normalizeChecklist(
-    getChecklistAnswersFromMetadata(isRecord(latestChecklistEvent?.metadata) ? latestChecklistEvent.metadata : null) as Shift['checklist']
+  const checklistItems = mergeChecklistSources(
+    getChecklistAnswersFromMetadata(isRecord(latestChecklistEvent?.metadata) ? latestChecklistEvent.metadata : null),
+    detailShift?.checklist,
   );
   const checklistSummary = {
     ...getChecklistSummary(checklistItems),
@@ -561,7 +580,12 @@ export function ShiftsPage() {
     hasFailures: checklistItems.length > 0 ? checklistItems.some((item) => item.status === 'fail') : null,
   };
   const timelineItems = detailShift ? buildTimeline(detailShift, shiftEvents) : [];
-  const breakSummary = getBreakSummary(shiftEvents);
+  const breakSummary = summarizeBreakAllowance(shiftEvents);
+  const workingSeconds = computeWorkingSeconds(
+    detailShift?.started_at ?? null,
+    detailShift?.ended_at ?? null,
+    breakSummary,
+  );
   const locationItems = shiftEvents
     .filter((event) => event.event_type === 'location');
   const latestLocationItems = locationItems.slice(-5).reverse();
@@ -912,6 +936,9 @@ export function ShiftsPage() {
                         <span>{item.latitude}</span>
                         <span>{item.longitude}</span>
                       </div>
+                      {isLikelyDefaultCoordinate(item.latitude, item.longitude) && (
+                        <p className="mt-1 text-[11px] text-amber-300">Invalid/default coordinate flagged</p>
+                      )}
                       <p className="text-[11px] text-gray-500 mt-1">
                         {formatTimestamp(item.created_at)}
                       </p>
@@ -1003,20 +1030,33 @@ export function ShiftsPage() {
               <CardContent className="space-y-3 text-sm">
                 <div className="space-y-2 text-xs">
                   <div className="bg-[#121212] rounded-lg px-3 py-2 text-gray-300">
-                    Used: {formatDurationSeconds(breakSummary.usedSeconds)}
+                    Raw break taken: {formatDurationSeconds(breakSummary.rawBreakSeconds) ?? '—'}
                   </div>
                   <div className="bg-[#121212] rounded-lg px-3 py-2 text-gray-300">
-                    Allowance: {formatDurationSeconds(breakSummary.allowanceSeconds)}
+                    Allowed break time: {formatDurationSeconds(breakSummary.allowanceSeconds) ?? '30m 0s'}
                   </div>
                   <div className="bg-[#121212] rounded-lg px-3 py-2 text-gray-300">
-                    Remaining: {formatDurationSeconds(breakSummary.remainingSeconds)}
+                    Counted for payroll/work time: {formatDurationSeconds(breakSummary.countedBreakSeconds) ?? '—'}
+                  </div>
+                  <div className="bg-[#121212] rounded-lg px-3 py-2 text-gray-300">
+                    Working time (minus max 30m break): {formatDurationSeconds(workingSeconds ?? -1) ?? '—'}
                   </div>
                   <div className="bg-[#121212] rounded-lg px-3 py-2">
                     <span className="text-gray-400">Status:</span>{" "}
-                    <span className={breakSummary.isOnBreak ? "text-yellow-400" : "text-green-400"}>
-                      {breakSummary.isOnBreak ? "On break" : "Working"}
+                    <span className={breakSummary.status === 'exceeded' ? 'text-red-400' : 'text-green-400'}>
+                      {breakSummary.status === 'exceeded' ? 'Exceeded allowance' : 'Within allowance'}
                     </span>
                   </div>
+                  {breakSummary.blockMessage && (
+                    <div className="bg-amber-950/40 border border-amber-800 rounded-lg px-3 py-2 text-amber-300">
+                      {breakSummary.blockMessage}
+                    </div>
+                  )}
+                  {breakSummary.shouldAutoEndCurrentBreak && (
+                    <div className="bg-red-950/40 border border-red-800 rounded-lg px-3 py-2 text-red-300">
+                      Break allowance reached while on break. Current break should be auto-ended.
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

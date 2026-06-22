@@ -28,6 +28,7 @@ import {
   CheckCircle2,
   ExternalLink,
   Loader,
+  ClipboardCheck,
   Menu,
   X,
 } from 'lucide-react';
@@ -40,13 +41,14 @@ const navigation = [
   { name: 'Odometer', href: '/odometer', icon: Camera },
   { name: 'Fuel Logs', href: '/fuel-logs', icon: Droplets },
   { name: 'Shifts', href: '/shifts', icon: Calendar },
+  { name: 'Checklist Approvals', href: '/checklist-approvals', icon: ClipboardCheck },
   { name: 'Maintenance', href: '/maintenance', icon: Wrench },
   { name: 'Logs', href: '/logs', icon: FileText },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
 function InboxDialogButton() {
-  const { notifications, loading, busyId, unreadCount, refresh, acknowledge, complete } = useInbox();
+  const { notifications, checklistPendingCount, loading, busyId, unreadCount, refresh, acknowledge, complete } = useInbox();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
@@ -100,60 +102,86 @@ function InboxDialogButton() {
               </div>
             ) : unreadCount === 0 ? (
               <div className="rounded-lg border border-gray-800 bg-[#0F0F0F] p-4 text-sm text-gray-400">
-                No unacknowledged service alerts.
+                No unacknowledged notifications.
               </div>
             ) : (
-              notifications.map((notification) => {
-                const busy = busyId === notification.maintenance_item_id;
-                return (
-                  <Card key={notification.maintenance_item_id} className="border-gray-800 bg-[#0F0F0F]">
+              <>
+                {checklistPendingCount > 0 && (
+                  <Card className="border-gray-800 bg-[#0F0F0F]">
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-semibold text-yellow-300">Service due soon</p>
+                        <p className="text-sm font-semibold text-red-300">Failed checklist approvals pending</p>
                         <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
                       </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                        <p className="text-gray-300">Vehicle rego: <span className="text-white">{notification.vehicle_rego ?? notification.vehicle_id ?? 'Unknown'}</span></p>
-                        <p className="text-gray-300">Current km: <span className="text-white">{notification.current_km != null ? `${Math.round(notification.current_km).toLocaleString()} km` : '—'}</span></p>
-                        <p className="text-gray-300">Target service km: <span className="text-white">{notification.target_service_km != null ? `${Math.round(notification.target_service_km).toLocaleString()} km` : '—'}</span></p>
-                        <p className="text-gray-300">KM remaining: <span className="text-white">{notification.km_remaining != null ? `${Math.round(notification.km_remaining).toLocaleString()} km` : '—'}</span></p>
-                        <p className="text-gray-300 sm:col-span-2">Created: <span className="text-white">{formatPerthDateTime(notification.created_at)}</span></p>
-                      </div>
-
+                      <p className="text-sm text-gray-300">
+                        {checklistPendingCount} pending checklist approval request(s) require admin action.
+                      </p>
                       <div className="flex flex-wrap gap-2">
                         <Button
                           size="sm"
                           className="bg-[#FF6B35] text-white hover:bg-[#E55A2B]"
-                          disabled={busy}
-                          onClick={() => acknowledge(notification.maintenance_item_id)}
-                        >
-                          <Check className="w-4 h-4 mr-1" />
-                          Acknowledge
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="bg-green-600 text-white hover:bg-green-500"
-                          disabled={busy}
-                          onClick={() => complete(notification.maintenance_item_id)}
-                        >
-                          <CheckCircle2 className="w-4 h-4 mr-1" />
-                          Mark completed
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-gray-300 hover:text-white"
-                          onClick={() => { setOpen(false); navigate('/maintenance'); }}
+                          onClick={() => { setOpen(false); navigate('/checklist-approvals'); }}
                         >
                           <ExternalLink className="w-4 h-4 mr-1" />
-                          Go to Maintenance
+                          Review checklist approvals
                         </Button>
                       </div>
                     </CardContent>
                   </Card>
-                );
-              })
+                )}
+
+                {notifications.map((notification) => {
+                  const busy = busyId === notification.maintenance_item_id;
+                  return (
+                    <Card key={notification.maintenance_item_id} className="border-gray-800 bg-[#0F0F0F]">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-yellow-300">Service due soon</p>
+                          <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                          <p className="text-gray-300">Vehicle rego: <span className="text-white">{notification.vehicle_rego ?? notification.vehicle_id ?? 'Unknown'}</span></p>
+                          <p className="text-gray-300">Current km: <span className="text-white">{notification.current_km != null ? `${Math.round(notification.current_km).toLocaleString()} km` : '—'}</span></p>
+                          <p className="text-gray-300">Target service km: <span className="text-white">{notification.target_service_km != null ? `${Math.round(notification.target_service_km).toLocaleString()} km` : '—'}</span></p>
+                          <p className="text-gray-300">KM remaining: <span className="text-white">{notification.km_remaining != null ? `${Math.round(notification.km_remaining).toLocaleString()} km` : '—'}</span></p>
+                          <p className="text-gray-300 sm:col-span-2">Created: <span className="text-white">{formatPerthDateTime(notification.created_at)}</span></p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            className="bg-[#FF6B35] text-white hover:bg-[#E55A2B]"
+                            disabled={busy}
+                            onClick={() => acknowledge(notification.maintenance_item_id)}
+                          >
+                            <Check className="w-4 h-4 mr-1" />
+                            Acknowledge
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="bg-green-600 text-white hover:bg-green-500"
+                            disabled={busy}
+                            onClick={() => complete(notification.maintenance_item_id)}
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            Mark completed
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-gray-300 hover:text-white"
+                            onClick={() => { setOpen(false); navigate('/maintenance'); }}
+                          >
+                            <ExternalLink className="w-4 h-4 mr-1" />
+                            Go to Maintenance
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </>
             )}
           </div>
         </DialogContent>
@@ -169,7 +197,38 @@ export function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onlineDrivers] = useState(12); // Mock data - replace with real data
 
-  const handleLogout = async () => {
+  const handleLogout = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const source = event.currentTarget;
+    const clickedElement = event.target instanceof HTMLElement ? event.target : null;
+    const clickedTag = clickedElement?.tagName ?? 'unknown';
+    const clickedId = clickedElement?.id ?? '';
+    const clickedClass = clickedElement?.className ?? '';
+    const clickedText = clickedElement?.textContent?.trim().slice(0, 80) ?? '';
+
+    console.error('[AUTH LOGOUT CLICK]', {
+      trusted: event.nativeEvent.isTrusted,
+      clickedTag,
+      clickedId,
+      clickedClass,
+      clickedText,
+      sourceTag: source.tagName,
+      sourceDataAttr: source.dataset.logoutTrigger,
+    });
+
+    if (!event.nativeEvent.isTrusted) {
+      console.error('[AUTH LOGOUT SOURCE]', 'blocked-untrusted-logout-click');
+      return;
+    }
+
+    if (source.dataset.logoutTrigger !== 'true') {
+      console.error('[AUTH LOGOUT SOURCE]', 'blocked-non-logout-click-source');
+      return;
+    }
+
+    console.error('[AUTH LOGOUT SOURCE]', 'dashboard-layout-logout-button');
     await signOut();
     setSidebarOpen(false);
     navigate('/login', { replace: true });
@@ -218,6 +277,7 @@ export function DashboardLayout() {
           {/* Logout button */}
           <div className="p-4 border-t border-gray-800">
             <Button
+              data-logout-trigger="true"
               onClick={handleLogout}
               variant="ghost"
               className="w-full justify-start text-gray-300 hover:bg-[#0F0F0F] hover:text-white"
@@ -232,8 +292,22 @@ export function DashboardLayout() {
       {/* Mobile sidebar */}
       {sidebarOpen && (
         <div className="lg:hidden">
-          <div className="fixed inset-0 z-40 bg-black/80" onClick={() => setSidebarOpen(false)} />
-          <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-[#161616] border-r border-gray-800">
+          <div
+            className="fixed inset-0 z-40 bg-black/80"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (event.target === event.currentTarget) {
+                setSidebarOpen(false);
+              }
+            }}
+          />
+          <aside
+            className="fixed inset-y-0 left-0 z-50 w-64 bg-[#161616] border-r border-gray-800"
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between h-16 px-6 border-b border-gray-800">
                 <div className="flex items-center">
@@ -280,6 +354,7 @@ export function DashboardLayout() {
 
               <div className="p-4 border-t border-gray-800">
                 <Button
+                  data-logout-trigger="true"
                   onClick={handleLogout}
                   variant="ghost"
                   className="w-full justify-start text-gray-300 hover:bg-[#0F0F0F] hover:text-white"

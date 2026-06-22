@@ -1,5 +1,6 @@
 import { Plus, Minus } from 'lucide-react';
 import { useState } from 'react';
+import type { Page } from '../App';
 
 interface FaqItem {
   question: string;
@@ -57,11 +58,20 @@ const faqs: FaqItem[] = [
   },
 ];
 
-export function FaqPage() {
+interface FaqPageProps {
+  onNavigate: (page: Page) => void;
+}
+
+export function FaqPage({ onNavigate }: FaqPageProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   const toggleFaq = (index: number) => {
     setOpenIndex(openIndex === index ? null : index);
+  };
+
+  const handleNavigate = (page: Page) => {
+    onNavigate(page);
+    window.scrollTo(0, 0);
   };
 
   return (
@@ -111,7 +121,10 @@ export function FaqPage() {
           <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
             If you can't find the answer you're looking for, our team is here to help. Get in touch and we'll provide the information you need.
           </p>
-          <button className="interactive-button bg-[#D32323] text-white px-8 py-3 rounded hover:bg-[#B01E1E]">
+          <button
+            onClick={() => handleNavigate('contact')}
+            className="interactive-button bg-[#D32323] text-white px-8 py-3 rounded hover:bg-[#B01E1E]"
+          >
             Contact Us
           </button>
         </div>
