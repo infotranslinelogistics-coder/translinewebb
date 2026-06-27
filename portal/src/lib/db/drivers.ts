@@ -52,7 +52,7 @@ export async function listDrivers(): Promise<Driver[]> {
   const [profilesResponse, vehicleAssignmentsResponse] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, phone')
+      .select('id, phone, email')
       .in('id', userIds),
     supabase
       .from('vehicles_with_driver')
@@ -90,6 +90,7 @@ export async function listDrivers(): Promise<Driver[]> {
       status: d.status,
       auth_user_id: d.user_id,
       phone: profile?.phone || null,
+      email: profile?.email || null,
 
       current_vehicle_id: assignment?.vehicle_id || null,
       current_vehicle_rego: assignment?.rego || null,
@@ -121,7 +122,7 @@ export async function getDriver(id: string): Promise<Driver | null> {
       user_id,
       full_name,
       status,
-      profiles!drivers_user_id_fkey ( phone ),
+      profiles!drivers_user_id_fkey ( phone, email ),
       vehicle_assignments!vehicle_assignments_driver_id_fkey (
         vehicle_id,
         vehicles ( rego )
@@ -141,7 +142,8 @@ export async function getDriver(id: string): Promise<Driver | null> {
     auth_user_id: data.user_id ?? null,
     full_name: data.full_name ?? null,
     status: data.status ?? null,
-    phone: (data.profiles as { phone?: string } | null)?.phone ?? null,
+    phone: (data.profiles as { phone?: string; email?: string } | null)?.phone ?? null,
+    email: (data.profiles as { phone?: string; email?: string } | null)?.email ?? null,
     current_vehicle_id: activeAssignment?.vehicle_id ?? null,
     current_vehicle_rego: (activeAssignment?.vehicles as { rego?: string } | null)?.rego ?? null,
   };
