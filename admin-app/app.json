@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "TransLine Admin",
+    "slug": "translineadmin",
+    "version": "0.1.0",
+    "sdkVersion": "54.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "translineadmin",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      "expo-system-ui"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.transline.admin",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.transline.admin",
+      "versionCode": 1,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyD_PLACEHOLDER_GOOGLE_MAPS_KEY"
+        }
+      }
+    },
+    "extra": {
+      "supabaseUrl": "https://fjllbnhcyugxltiresjp.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqbGxibmhjeXVneGx0aXJlc2pwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5ODAyNzMsImV4cCI6MjA4NzU1NjI3M30.alLINSopMh0fhu-Ae0kUbczNXdTVlk-JtWMMEpgjeuI",
+      "SUPABASE_URL": "https://fjllbnhcyugxltiresjp.supabase.co",
+      "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqbGxibmhjeXVneGx0aXJlc2pwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5ODAyNzMsImV4cCI6MjA4NzU1NjI3M30.alLINSopMh0fhu-Ae0kUbczNXdTVlk-JtWMMEpgjeuI"
+    }
+  }
+}
