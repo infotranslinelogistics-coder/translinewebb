@@ -1,5 +1,5 @@
 // Main dashboard layout with sidebar and header
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/app/components/ui/button';
@@ -9,6 +9,8 @@ import { Card, CardContent } from '@/app/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { formatPerthDateTime } from '@/lib/dateTime';
 import { InboxProvider, useInbox } from '@/contexts/InboxContext';
+import { supabase } from '@/lib/supabase';
+import { listDrivers } from '@/lib/db/drivers';
 import {
   LayoutDashboard,
   Users,
@@ -195,7 +197,37 @@ export function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [onlineDrivers] = useState(12); // Mock data - replace with real data
+  const [onlineDrivers, setOnlineDrivers] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshOnlineDrivers = async () => {
+      try {
+        const drivers = await listDrivers();
+        if (cancelled) return;
+        setOnlineDrivers(drivers.filter((d) => d.online_status === 'online').length);
+      } catch (err) {
+        console.error('Failed to fetch online driver count:', err);
+      }
+    };
+
+    refreshOnlineDrivers();
+    const intervalId = setInterval(refreshOnlineDrivers, 30000);
+
+    const presenceChannel = supabase
+      .channel('dashboard-driver-presence')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_presence' }, () => {
+        refreshOnlineDrivers();
+      })
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+      supabase.removeChannel(presenceChannel);
+    };
+  }, []);
 
   const handleLogout = async (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
