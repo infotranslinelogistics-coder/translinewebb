@@ -6,6 +6,7 @@ export type DrawerParamList = {
   VehicleProfile: { vehicleId: string };
   LiveMap: undefined;
   Shifts: undefined;
+  ShiftDetail: { shiftId: string };
   FuelLogs: undefined;
   ChecklistApprovals: undefined;
   Maintenance: undefined;

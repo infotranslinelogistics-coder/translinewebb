@@ -33,12 +33,7 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.transline.admin",
-      "versionCode": 1,
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyD_PLACEHOLDER_GOOGLE_MAPS_KEY"
-        }
-      }
+      "versionCode": 1
     },
     "extra": {
       "supabaseUrl": "https://fjllbnhcyugxltiresjp.supabase.co",

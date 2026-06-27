@@ -12,8 +12,13 @@ import DriverProfileScreen from './src/screens/DriverProfileScreen';
 import VehiclesScreen from './src/screens/VehiclesScreen';
 import VehicleProfileScreen from './src/screens/VehicleProfileScreen';
 import LiveMapScreen from './src/screens/LiveMapScreen';
+import ShiftsScreen from './src/screens/ShiftsScreen';
+import ShiftDetailScreen from './src/screens/ShiftDetailScreen';
+import FuelLogsScreen from './src/screens/FuelLogsScreen';
+import ChecklistApprovalsScreen from './src/screens/ChecklistApprovalsScreen';
+import MaintenanceScreen from './src/screens/MaintenanceScreen';
+import LogsScreen from './src/screens/LogsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
-import ComingSoonScreen from './src/screens/ComingSoonScreen';
 import type { DrawerParamList, RootStackParamList } from './src/types/navigation';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -45,25 +50,20 @@ function MainDrawer() {
         options={{ drawerItemStyle: { display: 'none' }, title: 'Vehicle' }}
       />
       <Drawer.Screen name="LiveMap" component={LiveMapScreen} options={{ title: 'Live Map' }} />
+      <Drawer.Screen name="Shifts" component={ShiftsScreen} />
       <Drawer.Screen
-        name="Shifts"
-        children={() => <ComingSoonScreen title="Shifts" />}
+        name="ShiftDetail"
+        component={ShiftDetailScreen}
+        options={{ drawerItemStyle: { display: 'none' }, title: 'Shift' }}
       />
-      <Drawer.Screen
-        name="FuelLogs"
-        options={{ title: 'Fuel Logs' }}
-        children={() => <ComingSoonScreen title="Fuel Logs" />}
-      />
+      <Drawer.Screen name="FuelLogs" component={FuelLogsScreen} options={{ title: 'Fuel Logs' }} />
       <Drawer.Screen
         name="ChecklistApprovals"
+        component={ChecklistApprovalsScreen}
         options={{ title: 'Checklist Approvals' }}
-        children={() => <ComingSoonScreen title="Checklist Approvals" />}
       />
-      <Drawer.Screen
-        name="Maintenance"
-        children={() => <ComingSoonScreen title="Maintenance" />}
-      />
-      <Drawer.Screen name="Logs" children={() => <ComingSoonScreen title="Logs" />} />
+      <Drawer.Screen name="Maintenance" component={MaintenanceScreen} />
+      <Drawer.Screen name="Logs" component={LogsScreen} />
       <Drawer.Screen name="Settings" component={SettingsScreen} />
     </Drawer.Navigator>
   );
