@@ -13,6 +13,7 @@ import {
 } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { listLatestLocationsByDrivers } from '@/lib/db/locations';
+import { listDriverEmails } from '@/lib/api/admin';
 import { listVehicles, Vehicle } from '@/lib/db/vehicles';
 import { clearOdometerPhotoCache, getOdometerPhotoUrl } from '@/lib/storage/odometerPhotos';
 import { formatPerthDateTime } from '@/lib/dateTime';
@@ -143,7 +144,7 @@ export function DriverProfilePage() {
         const [driverRes, contactRes, statusRes, assignRes, vehicleList, activeShiftRes, latestOdoRes, weeklyRes, locationRows] =
           await Promise.all([
             supabase.from('drivers_full').select('*').eq('driver_id', driverId).maybeSingle(),
-            supabase.from('drivers').select('profiles!drivers_user_id_fkey ( email, phone )').eq('id', driverId).maybeSingle(),
+            supabase.from('drivers').select('user_id, profiles!drivers_user_id_fkey ( phone )').eq('id', driverId).maybeSingle(),
             supabase.from('view_driver_current_status').select('*').eq('driver_id', driverId).maybeSingle(),
             supabase.from('drivers_with_current_vehicle').select('current_vehicle_id, current_vehicle_rego').eq('driver_id', driverId).maybeSingle(),
             listVehicles(),
@@ -153,8 +154,18 @@ export function DriverProfilePage() {
             supabase.from('shifts').select('id, driver_id, vehicle_id, started_at, ended_at, status').eq('driver_id', driverId).lte('started_at', weekEnd).or(`ended_at.gte.${weekStart},ended_at.is.null`),
             listLatestLocationsByDrivers([driverId]),
           ]);
-        const contact = (contactRes.data as { profiles?: { email?: string | null; phone?: string | null } | null } | null)?.profiles;
-        setDriver(driverRes.data ? { ...(driverRes.data as DriverRow), email: contact?.email ?? (driverRes.data as DriverRow).email, phone: contact?.phone ?? (driverRes.data as DriverRow).phone } : null);
+        const contactData = contactRes.data as { user_id?: string | null; profiles?: { phone?: string | null } | null } | null;
+        const contact = contactData?.profiles;
+        let email: string | null = null;
+        if (contactData?.user_id) {
+          try {
+            const emails = await listDriverEmails([contactData.user_id]);
+            email = emails[contactData.user_id] ?? null;
+          } catch (emailErr) {
+            console.error('[DriverProfile] listDriverEmails failed', emailErr);
+          }
+        }
+        setDriver(driverRes.data ? { ...(driverRes.data as DriverRow), email: email ?? (driverRes.data as DriverRow).email, phone: contact?.phone ?? (driverRes.data as DriverRow).phone } : null);
         setStatus((statusRes.data as DriverStatusRow) ?? null);
         setAssignmentSnapshot((assignRes.data as DriverAssignmentSnapshot) ?? null);
         setVehicles(vehicleList ?? []);

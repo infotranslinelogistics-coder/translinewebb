@@ -27,7 +27,7 @@ export async function listDrivers(): Promise<Driver[]> {
   const userIds = (drivers || []).map((d) => d.user_id).filter(Boolean);
 
   const [profilesResponse, vehicleAssignmentsResponse] = await Promise.all([
-    supabase.from('profiles').select('id, phone, email').in('id', userIds),
+    supabase.from('profiles').select('id, phone').in('id', userIds),
     supabase.from('vehicles_with_driver').select('rego, driver_id'),
   ]);
 
@@ -50,7 +50,7 @@ export async function listDrivers(): Promise<Driver[]> {
       driver_id: d.id,
       full_name: d.full_name,
       status: d.status,
-      email: profile?.email || null,
+      email: null,
       phone: profile?.phone || null,
       online_status: presence?.status || 'offline',
       current_vehicle_rego: assignment?.rego || null,
@@ -66,7 +66,7 @@ export async function getDriver(id: string): Promise<Driver | null> {
       full_name,
       status,
       user_id,
-      profiles!drivers_user_id_fkey ( phone, email ),
+      profiles!drivers_user_id_fkey ( phone ),
       driver_presence!left ( status, last_seen )
     `)
     .eq('id', id)
@@ -84,7 +84,7 @@ export async function getDriver(id: string): Promise<Driver | null> {
     driver_id: data.id,
     full_name: data.full_name,
     status: data.status,
-    email: profile?.email ?? null,
+    email: null,
     phone: profile?.phone ?? null,
     online_status: presence?.status || 'offline',
     current_vehicle_rego: null,
