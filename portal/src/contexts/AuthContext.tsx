@@ -82,26 +82,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error };
       }
 
-      // Portal is admin-only: block accounts linked to a driver record.
+      // Portal is admin-only: require profiles.role === 'admin'.
       if (data.user?.id) {
-        const { data: driverRow, error: driverLookupError } = await supabase
-          .from('drivers')
-          .select('id')
-          .eq('user_id', data.user.id)
+        const { data: profile, error: profileLookupError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
           .maybeSingle();
 
-        if (driverLookupError) {
-          console.error('Failed to verify portal access role:', driverLookupError);
-          console.error('Portal access role verification failed; preserving active auth session.');
+        if (profileLookupError) {
+          console.error('Failed to verify portal access role:', profileLookupError);
           return {
             error: new Error('Unable to verify portal access right now. Please try again.'),
           };
         }
 
-        if (driverRow) {
-          console.error('Driver account detected during portal sign-in; preserving active auth session.');
+        if (!profile || profile.role !== 'admin') {
+          console.error('Non-admin account detected during portal sign-in.');
+          await supabase.auth.signOut({ scope: 'local' });
           return {
-            error: new Error('Drivers cannot log in to the admin portal.'),
+            error: new Error('This account does not have admin access.'),
           };
         }
       }

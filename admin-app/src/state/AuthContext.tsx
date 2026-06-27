@@ -38,21 +38,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error };
 
-    // Admin app is admin-only: block accounts linked to a driver record,
-    // same rule the web portal enforces.
+    // Admin app is admin-only: require profiles.role === 'admin'.
     if (data.user?.id) {
-      const { data: driverRow, error: driverLookupError } = await supabase
-        .from('drivers')
-        .select('id')
-        .eq('user_id', data.user.id)
+      const { data: profile, error: profileLookupError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
         .maybeSingle();
 
-      if (driverLookupError) {
+      if (profileLookupError) {
         return { error: new Error('Unable to verify admin access right now. Please try again.') };
       }
-      if (driverRow) {
+      if (!profile || profile.role !== 'admin') {
         await supabase.auth.signOut({ scope: 'local' });
-        return { error: new Error('Drivers cannot log in to the admin app.') };
+        return { error: new Error('This account does not have admin access.') };
       }
     }
 
