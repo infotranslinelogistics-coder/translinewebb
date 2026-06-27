@@ -29,9 +29,9 @@ export function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeShiftCount, setActiveShiftCount] = useState(0);
-  const [forceEndedToday, setForceEndedToday] = useState(0);
-  const [adminActionsToday, setAdminActionsToday] = useState(0);
+  const [activeShiftCount, setActiveShiftCount] = useState<number | null>(0);
+  const [forceEndedToday, setForceEndedToday] = useState<number | null>(0);
+  const [adminActionsToday, setAdminActionsToday] = useState<number | null>(0);
   const [serviceAlertOpen, setServiceAlertOpen] = useState(false);
   const autoOpenedRef = useRef(false);
 
@@ -40,7 +40,7 @@ export function DashboardPage() {
       .from('shifts')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active');
-    if (err) { console.error('fetchActiveShiftCount:', err); return; }
+    if (err) { console.error('fetchActiveShiftCount:', err); setActiveShiftCount(null); return; }
     setActiveShiftCount(count || 0);
   }, []);
 
@@ -50,7 +50,7 @@ export function DashboardPage() {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'force_ended')
       .gte('ended_at', startOfToday().toISOString());
-    if (err) { console.error('fetchForceEndedToday:', err); return; }
+    if (err) { console.error('fetchForceEndedToday:', err); setForceEndedToday(null); return; }
     setForceEndedToday(count || 0);
   }, []);
 
@@ -59,7 +59,7 @@ export function DashboardPage() {
       .from('admin_audit_logs')
       .select('*', { count: 'exact', head: true })
       .gte('created_at', startOfToday().toISOString());
-    if (err) { console.error('fetchAdminActionsToday:', err); return; }
+    if (err) { console.error('fetchAdminActionsToday:', err); setAdminActionsToday(null); return; }
     setAdminActionsToday(count || 0);
   }, []);
 
@@ -258,7 +258,7 @@ export function DashboardPage() {
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-400 mb-1">Active Shifts Now</p>
-                <p className="text-3xl font-bold text-green-400">{activeShiftCount}</p>
+                <p className="text-3xl font-bold text-green-400">{activeShiftCount ?? '—'}</p>
               </div>
               <div className="bg-green-700 w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0">
                 <Activity className="w-6 h-6 text-white" />
@@ -271,7 +271,7 @@ export function DashboardPage() {
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-400 mb-1">Force-Ended Today</p>
-                <p className="text-3xl font-bold text-red-400">{forceEndedToday}</p>
+                <p className="text-3xl font-bold text-red-400">{forceEndedToday ?? '—'}</p>
               </div>
               <div className="bg-red-700 w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0">
                 <ShieldAlert className="w-6 h-6 text-white" />
@@ -284,7 +284,7 @@ export function DashboardPage() {
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-400 mb-1">Admin Actions Today</p>
-                <p className="text-3xl font-bold text-blue-400">{adminActionsToday}</p>
+                <p className="text-3xl font-bold text-blue-400">{adminActionsToday ?? '—'}</p>
               </div>
               <div className="bg-blue-700 w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0">
                 <ClipboardList className="w-6 h-6 text-white" />

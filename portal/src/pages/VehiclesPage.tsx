@@ -19,6 +19,7 @@ import {
 import { Search, Plus, Eye, Trash2, Loader } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { listVehicles as listVehiclesWithAssignments, type Vehicle as DbVehicle } from '@/lib/db/vehicles';
+import { toast } from 'sonner';
 
 interface Vehicle {
   id: string;
@@ -58,6 +59,7 @@ export function VehiclesPage() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState('');
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isSavingAssignment, setIsSavingAssignment] = useState(false);
 
   useEffect(() => {
     loadPage();
@@ -214,14 +216,15 @@ export function VehiclesPage() {
   }
 
   async function saveVehicleAssignment() {
-    if (!selectedVehicle) return;
+    if (!selectedVehicle || isSavingAssignment) return;
 
     const vehicleId = resolveVehicleId(selectedVehicle);
     if (!vehicleId) {
-      alert('Missing vehicle id');
+      toast.error('Missing vehicle id');
       return;
     }
 
+    setIsSavingAssignment(true);
     try {
       if (!selectedDriverId) {
         const { error } = await supabase.rpc('assign_vehicle', {
@@ -231,7 +234,7 @@ export function VehiclesPage() {
 
         if (error) {
           console.error(error);
-          alert('Failed to unassign vehicle');
+          toast.error('Failed to unassign vehicle');
           return;
         }
       } else {
@@ -242,7 +245,7 @@ export function VehiclesPage() {
 
         if (error) {
           console.error(error);
-          alert('Failed to assign vehicle');
+          toast.error('Failed to assign vehicle');
           return;
         }
       }
@@ -254,10 +257,12 @@ export function VehiclesPage() {
       setSelectedVehicle(null);
       setSelectedDriverId('');
 
-      alert('Vehicle updated successfully');
+      toast.success('Vehicle updated successfully');
     } catch (err) {
       console.error(err);
-      alert('Unexpected error');
+      toast.error('Unexpected error');
+    } finally {
+      setIsSavingAssignment(false);
     }
   }
 
@@ -463,8 +468,9 @@ export function VehiclesPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label className="text-gray-300">Driver</Label>
+              <Label htmlFor="vehicle-driver-select" className="text-gray-300">Driver</Label>
               <select
+                id="vehicle-driver-select"
                 value={String(selectedDriverId || '')}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDriverId(String(e.target.value))}
                 className="w-full bg-[#0F0F0F] border border-gray-700 text-white p-2 rounded"
@@ -477,8 +483,12 @@ export function VehiclesPage() {
                 ))}
               </select>
             </div>
-            <Button onClick={saveVehicleAssignment} className="w-full bg-[#FF6B35] hover:bg-[#E55A2B] text-white">
-              Save
+            <Button
+              onClick={saveVehicleAssignment}
+              disabled={isSavingAssignment}
+              className="w-full bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
+            >
+              {isSavingAssignment ? 'Saving...' : 'Save'}
             </Button>
           </div>
         </DialogContent>

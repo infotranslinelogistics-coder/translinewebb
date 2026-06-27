@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase';
 import { useDriverLiveState, isOnlineFromLastSeen, type DriverLiveStatus } from '@/lib/realtime/useDriverLiveState';
 import { formatDistanceStrict } from 'date-fns';
 import { listDrivers } from '@/lib/db/drivers';
+import { toast } from 'sonner';
 
 type ShiftRow = {
   id: string;
@@ -88,6 +89,7 @@ export function DriversPage() {
   const [selectedDriver, setSelectedDriver] = useState<DriverRow | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
+  const [isSavingVehicle, setIsSavingVehicle] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [passwordDriver, setPasswordDriver] = useState<DriverRow | null>(null);
   const [passwordSaving, setPasswordSaving] = useState(false);
@@ -140,14 +142,15 @@ export function DriversPage() {
   }
 
   async function saveVehicleAssignment() {
-    if (!selectedDriver) return;
+    if (!selectedDriver || isSavingVehicle) return;
 
+    setIsSavingVehicle(true);
     try {
       const selectedDriverId = resolveDriverId(selectedDriver);
       if (selectedVehicleId) {
         const occupancy = vehicleOccupancy.get(String(selectedVehicleId));
         if (occupancy && occupancy.driverId !== selectedDriverId) {
-          alert(`Vehicle is already assigned to ${occupancy.label}. Unassign it first.`);
+          toast.error(`Vehicle is already assigned to ${occupancy.label}. Unassign it first.`);
           return;
         }
       }
@@ -157,7 +160,7 @@ export function DriversPage() {
           await unassignDriverFromAllVehicles(selectedDriver.driver_id);
         } catch (unassignError) {
           console.error('assign_vehicle unassign error:', unassignError);
-          alert('Failed to unassign vehicle');
+          toast.error('Failed to unassign vehicle');
           return;
         }
       } else {
@@ -168,7 +171,7 @@ export function DriversPage() {
 
         if (assignError) {
           console.error('assign_vehicle error:', assignError);
-          alert('Failed to assign vehicle');
+          toast.error('Failed to assign vehicle');
           return;
         }
       }
@@ -182,10 +185,12 @@ export function DriversPage() {
       setSelectedDriver(null);
       setSelectedVehicleId('');
 
-      alert('Vehicle updated successfully');
+      toast.success('Vehicle updated successfully');
     } catch (err) {
       console.error('saveVehicleAssignment unexpected error:', err);
-      alert('Unexpected error updating vehicle');
+      toast.error('Unexpected error updating vehicle');
+    } finally {
+      setIsSavingVehicle(false);
     }
   }
 
@@ -516,10 +521,10 @@ export function DriversPage() {
       setDeleteDialog(false);
       setDriverToDelete(null);
       setError(null);
-      alert('Driver deleted successfully');
+      toast.success('Driver deleted successfully');
     } catch (err) {
       console.error('Delete unexpected error:', err);
-      alert('Unexpected error deleting driver');
+      toast.error('Unexpected error deleting driver');
     }
   }
 
@@ -744,8 +749,9 @@ export function DriversPage() {
                           </DialogHeader>
                           <div className="space-y-4">
                             <div>
-                              <Label className="text-gray-300">Vehicle</Label>
+                              <Label htmlFor="vehicle-assignment-select" className="text-gray-300">Vehicle</Label>
                               <select
+                                id="vehicle-assignment-select"
                                 value={String(selectedVehicleId || '')}
                                 onChange={(e) => setSelectedVehicleId(String(e.target.value))}
                                 className="w-full bg-[#0F0F0F] border border-gray-700 text-white p-2 rounded"
@@ -772,9 +778,10 @@ export function DriversPage() {
                             </div>
                             <Button
                               onClick={saveVehicleAssignment}
+                              disabled={isSavingVehicle}
                               className="w-full bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
                             >
-                              Save
+                              {isSavingVehicle ? 'Saving...' : 'Save'}
                             </Button>
                           </div>
                         </DialogContent>
