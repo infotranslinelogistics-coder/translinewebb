@@ -15,6 +15,7 @@ import LiveMapScreen from './src/screens/LiveMapScreen';
 import ShiftsScreen from './src/screens/ShiftsScreen';
 import ShiftDetailScreen from './src/screens/ShiftDetailScreen';
 import FuelLogsScreen from './src/screens/FuelLogsScreen';
+import OdometerLogsScreen from './src/screens/OdometerLogsScreen';
 import ChecklistApprovalsScreen from './src/screens/ChecklistApprovalsScreen';
 import MaintenanceScreen from './src/screens/MaintenanceScreen';
 import LogsScreen from './src/screens/LogsScreen';
@@ -57,6 +58,7 @@ function MainDrawer() {
         options={{ drawerItemStyle: { display: 'none' }, title: 'Shift' }}
       />
       <Drawer.Screen name="FuelLogs" component={FuelLogsScreen} options={{ title: 'Fuel Logs' }} />
+      <Drawer.Screen name="OdometerLogs" component={OdometerLogsScreen} options={{ title: 'Odometer Logs' }} />
       <Drawer.Screen
         name="ChecklistApprovals"
         component={ChecklistApprovalsScreen}

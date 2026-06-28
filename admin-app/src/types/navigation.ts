@@ -8,6 +8,7 @@ export type DrawerParamList = {
   Shifts: undefined;
   ShiftDetail: { shiftId: string };
   FuelLogs: undefined;
+  OdometerLogs: undefined;
   ChecklistApprovals: undefined;
   Maintenance: undefined;
   Logs: undefined;
