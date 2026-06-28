@@ -56,3 +56,45 @@ export async function getSignedStorageUrl({
   cache.set(cacheKey, { url: null, expiresAt: Date.now() + 60 * 1000 });
   return null;
 }
+
+// ─── Odometer photos ──────────────────────────────────────────────────────
+// Mirrors the portal's getOdometerPhotoUrl: a dedicated cache + {url,error}
+// shape so screens can show a "Photo failed / Retry" state.
+const ODOMETER_BUCKET = 'odometer_photos';
+const odometerCache = new Map<string, { url: string | null; error: string | null; expiresAt: number }>();
+
+export function clearOdometerPhotoCache(photoPath?: string | null) {
+  if (photoPath) odometerCache.delete(photoPath.trim());
+}
+
+export async function getOdometerPhotoUrl({
+  photoPath,
+  expiresInSeconds = 600,
+}: {
+  photoPath?: string | null;
+  expiresInSeconds?: number;
+}): Promise<{ url: string | null; error: string | null }> {
+  if (!photoPath) return { url: null, error: null };
+
+  const key = photoPath.trim();
+  const cached = odometerCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return { url: cached.url, error: cached.error };
+  }
+
+  // Pass candidates (not a single bucket) so getSignedStorageUrl tries each.
+  const url = await getSignedStorageUrl({
+    filePath: key,
+    bucketCandidates: [ODOMETER_BUCKET, 'odometer-photos', 'uploads'],
+    expiresInSeconds,
+  });
+
+  if (!url) {
+    const message = 'Unable to load photo';
+    odometerCache.set(key, { url: null, error: message, expiresAt: Date.now() + 60 * 1000 });
+    return { url: null, error: message };
+  }
+
+  odometerCache.set(key, { url, error: null, expiresAt: Date.now() + expiresInSeconds * 1000 });
+  return { url, error: null };
+}
