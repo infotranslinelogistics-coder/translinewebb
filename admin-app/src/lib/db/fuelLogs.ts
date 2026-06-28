@@ -12,6 +12,8 @@ export interface FuelLogRow {
   cost: number | null;
   odometer_km: number | null;
   station_name: string | null;
+  latitude: number | null;
+  longitude: number | null;
   receipt_url: string | null;
   reviewed: boolean;
 }
@@ -83,6 +85,8 @@ export async function listFuelLogs(): Promise<FuelLogRow[]> {
       cost: toNumber(metadata.cost),
       odometer_km: toNumber(metadata.odometer_km),
       station_name: toText(metadata.station_name) ?? toText(metadata.location_name),
+      latitude: toNumber(row.latitude),
+      longitude: toNumber(row.longitude),
       receipt_url: null as string | null,
       reviewed: isReviewed(metadata),
     };
@@ -94,6 +98,42 @@ export async function listFuelLogs(): Promise<FuelLogRow[]> {
       receipt_url: await getSignedStorageUrl({ filePath: getReceiptPath(row.metadata), bucket: 'fuel_receipts' }),
     }))
   );
+}
+
+export interface FuelWeeklySummary {
+  totalFuelLogs: number;
+  totalLitres: number;
+  totalCost: number;
+  avgPerLitre: number | null;
+}
+
+export async function getFuelWeeklySummary(): Promise<FuelWeeklySummary> {
+  const start = new Date();
+  const day = (start.getDay() + 6) % 7; // Monday = 0
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - day);
+
+  const { data, error } = await supabase
+    .from('shift_events')
+    .select('metadata')
+    .eq('event_type', 'fuel_log')
+    .gte('created_at', start.toISOString());
+
+  if (error) throw error;
+  const rows = (data ?? []) as Record<string, unknown>[];
+  let totalLitres = 0;
+  let totalCost = 0;
+  rows.forEach((r) => {
+    const m = (r.metadata ?? {}) as Record<string, unknown>;
+    totalLitres += toNumber(m.litres) ?? 0;
+    totalCost += toNumber(m.cost) ?? 0;
+  });
+  return {
+    totalFuelLogs: rows.length,
+    totalLitres,
+    totalCost,
+    avgPerLitre: totalLitres > 0 ? totalCost / totalLitres : null,
+  };
 }
 
 export async function toggleFuelLogReviewed(row: FuelLogRow): Promise<void> {

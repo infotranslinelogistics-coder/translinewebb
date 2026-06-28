@@ -1,27 +1,31 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Image,
-  Modal,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import ScreenContainer from '../components/ScreenContainer';
-import { deleteFuelLog, listFuelLogs, toggleFuelLogReviewed, type FuelLogRow } from '../lib/db/fuelLogs';
+import { Card, StatCard, Badge, Btn, KV, Loader, Empty, COLORS } from '../components/ui';
+import {
+  deleteFuelLog,
+  listFuelLogs,
+  toggleFuelLogReviewed,
+  getFuelWeeklySummary,
+  type FuelLogRow,
+  type FuelWeeklySummary,
+} from '../lib/db/fuelLogs';
+import { formatPerthDateTime } from '../lib/dateTime';
 
 export default function FuelLogsScreen() {
+  const navigation = useNavigation<any>();
   const [logs, setLogs] = useState<FuelLogRow[]>([]);
+  const [summary, setSummary] = useState<FuelWeeklySummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setLogs(await listFuelLogs());
+      const [l, s] = await Promise.all([listFuelLogs(), getFuelWeeklySummary().catch(() => null)]);
+      setLogs(l);
+      setSummary(s);
     } catch (err) {
       console.error('[FuelLogs] load failed', err);
     } finally {
@@ -33,13 +37,12 @@ export default function FuelLogsScreen() {
     load();
   }, [load]);
 
-  const handleToggleReviewed = async (row: FuelLogRow) => {
+  const handleToggle = async (row: FuelLogRow) => {
     setBusyId(row.id);
     try {
       await toggleFuelLogReviewed(row);
       await load();
     } catch (err) {
-      console.error('[FuelLogs] toggle reviewed failed', err);
       Alert.alert('Error', 'Failed to update fuel log.');
     } finally {
       setBusyId(null);
@@ -58,7 +61,6 @@ export default function FuelLogsScreen() {
             await deleteFuelLog(row.id);
             await load();
           } catch (err) {
-            console.error('[FuelLogs] delete failed', err);
             Alert.alert('Error', 'Failed to delete fuel log.');
           } finally {
             setBusyId(null);
@@ -69,91 +71,70 @@ export default function FuelLogsScreen() {
   };
 
   return (
-    <ScreenContainer title="Fuel Logs" subtitle={`${logs.length} recent`}>
+    <ScreenContainer title="Fuel Logs" subtitle="Fuel purchases recorded from shift events">
       {loading ? (
-        <ActivityIndicator color="#FF6B35" style={styles.loader} />
+        <Loader />
       ) : (
-        <FlatList
-          data={logs}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => {
-            const busy = busyId === item.id;
-            return (
-              <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.driver}>{item.driver_name ?? 'Unknown driver'}</Text>
-                  <Text style={styles.time}>{new Date(item.created_at).toLocaleString()}</Text>
-                </View>
-                <Text style={styles.vehicle}>{item.vehicle_rego ?? 'No vehicle'}</Text>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Litres</Text>
-                  <Text style={styles.detailValue}>{item.litres != null ? `${item.litres.toFixed(2)} L` : '—'}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Cost</Text>
-                  <Text style={styles.detailValue}>{item.cost != null ? `$${item.cost.toFixed(2)}` : '—'}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Station</Text>
-                  <Text style={styles.detailValue}>{item.station_name ?? '—'}</Text>
-                </View>
-                <View style={styles.actions}>
-                  {item.receipt_url ? (
-                    <TouchableOpacity style={styles.actionButton} onPress={() => setPreviewUrl(item.receipt_url)}>
-                      <Text style={styles.actionButtonText}>View Receipt</Text>
-                    </TouchableOpacity>
+        <ScrollView>
+          <View style={styles.statRow}>
+            <StatCard label="Weekly Logs" value={summary?.totalFuelLogs ?? 0} />
+            <StatCard label="Weekly Litres" value={`${(summary?.totalLitres ?? 0).toFixed(1)} L`} color={COLORS.blue} />
+            <StatCard label="Weekly Cost" value={`$${(summary?.totalCost ?? 0).toFixed(2)}`} color={COLORS.green} />
+            <StatCard label="Avg / Litre" value={summary?.avgPerLitre != null ? `$${summary.avgPerLitre.toFixed(2)}` : '—'} color={COLORS.accent} />
+          </View>
+
+          {logs.length === 0 ? (
+            <Empty text="No fuel logs found." />
+          ) : (
+            logs.map((item) => {
+              const busy = busyId === item.id;
+              return (
+                <Card key={item.id}>
+                  <View style={styles.rowBetween}>
+                    <Text style={styles.driver}>{item.driver_name ?? 'Unknown driver'}</Text>
+                    <Text style={styles.time}>{formatPerthDateTime(item.created_at)}</Text>
+                  </View>
+                  <Text style={styles.vehicle}>{item.vehicle_rego ?? 'No vehicle'}</Text>
+                  <KV k="Litres" v={item.litres != null ? `${item.litres.toFixed(2)} L` : '—'} />
+                  <KV k="Cost" v={item.cost != null ? `$${item.cost.toFixed(2)}` : '—'} />
+                  <KV k="Odometer" v={item.odometer_km != null ? `${item.odometer_km.toLocaleString()} km` : '—'} />
+                  <KV k="Station" v={item.station_name ?? '—'} />
+                  {item.latitude != null && item.longitude != null ? (
+                    <Pressable onPress={() => Linking.openURL(`https://www.google.com/maps?q=${item.latitude},${item.longitude}`)}>
+                      <Text style={styles.mapLink}>📍 Open in Maps</Text>
+                    </Pressable>
                   ) : null}
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    disabled={busy}
-                    onPress={() => handleToggleReviewed(item)}
-                  >
-                    <Text style={styles.actionButtonText}>{item.reviewed ? 'Mark Unseen' : 'Mark Seen'}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    disabled={busy}
-                    onPress={() => handleDelete(item)}
-                  >
-                    <Text style={styles.actionButtonText}>{busy ? '...' : 'Delete'}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          }}
-        />
+                  <View style={styles.actions}>
+                    {item.receipt_url ? <Btn label="View Receipt" small variant="secondary" onPress={() => setPreview(item.receipt_url)} /> : null}
+                    {item.shift_id ? <Btn label="View Shift" small variant="secondary" onPress={() => navigation.navigate('ShiftDetail', { shiftId: item.shift_id })} /> : null}
+                    <Btn label={item.reviewed ? 'Mark Unseen' : 'Mark Seen'} small variant="secondary" disabled={busy} onPress={() => handleToggle(item)} />
+                    <Btn label={busy ? '…' : 'Delete'} small variant="danger" disabled={busy} onPress={() => handleDelete(item)} />
+                  </View>
+                  {item.reviewed ? <View style={{ marginTop: 6 }}><Badge label="Seen" variant="green" /></View> : null}
+                </Card>
+              );
+            })
+          )}
+        </ScrollView>
       )}
 
-      <Modal visible={Boolean(previewUrl)} transparent animationType="fade" onRequestClose={() => setPreviewUrl(null)}>
-        <TouchableOpacity style={styles.modalBackdrop} onPress={() => setPreviewUrl(null)}>
-          {previewUrl ? <Image source={{ uri: previewUrl }} style={styles.previewImage} resizeMode="contain" /> : null}
-        </TouchableOpacity>
+      <Modal visible={Boolean(preview)} transparent animationType="fade" onRequestClose={() => setPreview(null)}>
+        <Pressable style={styles.previewBackdrop} onPress={() => setPreview(null)}>
+          {preview ? <Image source={{ uri: preview }} style={styles.previewImg} resizeMode="contain" /> : null}
+        </Pressable>
       </Modal>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  loader: { marginTop: 24 },
-  card: {
-    backgroundColor: '#161616',
-    borderColor: '#262626',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 10,
-  },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  driver: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  time: { color: '#9CA3AF', fontSize: 11 },
-  vehicle: { color: '#FF6B35', fontSize: 12, fontWeight: '600', marginTop: 2, marginBottom: 8 },
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
-  detailLabel: { color: '#9CA3AF', fontSize: 12 },
-  detailValue: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
+  statRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  driver: { color: COLORS.text, fontSize: 14, fontWeight: '700', flexShrink: 1 },
+  time: { color: COLORS.muted, fontSize: 11 },
+  vehicle: { color: COLORS.accent, fontSize: 12, fontWeight: '600', marginTop: 2, marginBottom: 8 },
+  mapLink: { color: COLORS.blue, fontSize: 12, marginTop: 6 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' },
-  actionButton: { backgroundColor: '#262626', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6 },
-  deleteButton: { backgroundColor: '#7F1D1D', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6 },
-  actionButtonText: { color: '#FFFFFF', fontSize: 11, fontWeight: '600' },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
-  previewImage: { width: '90%', height: '80%' },
+  previewBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
+  previewImg: { width: '92%', height: '80%' },
 });
