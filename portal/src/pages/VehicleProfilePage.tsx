@@ -158,8 +158,8 @@ export function VehicleProfilePage() {
         const [vRes, assignRes, latestOdoRes, firstOdoRes, weeklyRes, activeRes] = await Promise.all([
           supabase.from('vehicles').select('id, rego, make, model, status, created_at').eq('id', id).maybeSingle(),
           supabase.from('vehicles_with_driver').select('driver_id, driver_name').eq('vehicle_id', id).maybeSingle(),
-          supabase.from('odometer_readings').select('id, reading, captured_at, driver_id, photo_path, lat, lng').eq('vehicle_id', id).order('captured_at', { ascending: false }).limit(1),
-          supabase.from('odometer_readings').select('id, reading, captured_at, driver_id').eq('vehicle_id', id).order('captured_at', { ascending: true }).limit(1),
+          supabase.from('odometer_readings_feed').select('id, reading, captured_at, driver_id, photo_path, lat, lng').eq('vehicle_id', id).order('captured_at', { ascending: false }).limit(1),
+          supabase.from('odometer_readings_feed').select('id, reading, captured_at, driver_id').eq('vehicle_id', id).order('captured_at', { ascending: true }).limit(1),
           supabase.from('shifts_full').select('id, driver_id, driver_name, started_at, ended_at, status').eq('vehicle_id', id).lte('started_at', wkEnd).or(`ended_at.gte.${wkStart},ended_at.is.null`),
           supabase.from('shifts_full').select('id, driver_id, driver_name, started_at, ended_at, status').eq('vehicle_id', id).or('status.eq.active,ended_at.is.null').order('started_at', { ascending: false }).limit(1),
         ]);
@@ -227,7 +227,7 @@ export function VehicleProfilePage() {
     if (!id) return;
     const run = async () => {
       const from = (odoPage - 1) * PAGE_SIZE;
-      const { data, error: e, count } = await supabase.from('odometer_readings').select('id, reading, captured_at, driver_id, photo_path, lat, lng', { count: 'exact' }).eq('vehicle_id', id).order('captured_at', { ascending: false }).range(from, from + PAGE_SIZE - 1);
+      const { data, error: e, count } = await supabase.from('odometer_readings_feed').select('id, reading, captured_at, driver_id, photo_path, lat, lng', { count: 'exact' }).eq('vehicle_id', id).order('captured_at', { ascending: false }).range(from, from + PAGE_SIZE - 1);
       if (e) { console.error(e); return; }
       setOdoLogs((data as OdometerRow[]) ?? []); setOdoCount(count ?? 0);
     };

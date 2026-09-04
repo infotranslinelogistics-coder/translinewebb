@@ -149,7 +149,7 @@ export function DriverProfilePage() {
             supabase.from('drivers_with_current_vehicle').select('current_vehicle_id, current_vehicle_rego').eq('driver_id', driverId).maybeSingle(),
             listVehicles(),
             supabase.from('shifts').select('*').eq('driver_id', driverId).or('status.eq.active,ended_at.is.null').order('started_at', { ascending: false }).limit(1),
-            supabase.from('odometer_readings').select('id, driver_id, vehicle_id, shift_id, reading, photo_path, captured_at, created_at, lat, lng').eq('driver_id', driverId).order('captured_at', { ascending: false }).limit(1),
+            supabase.from('odometer_readings_feed').select('id, driver_id, vehicle_id, shift_id, reading, photo_path, captured_at, created_at, lat, lng').eq('driver_id', driverId).order('captured_at', { ascending: false }).limit(1),
             // Fetch all shifts that OVERLAP this week (started before weekEnd AND (ended after weekStart OR still active))
             supabase.from('shifts').select('id, driver_id, vehicle_id, started_at, ended_at, status').eq('driver_id', driverId).lte('started_at', weekEnd).or(`ended_at.gte.${weekStart},ended_at.is.null`),
             listLatestLocationsByDrivers([driverId]),
@@ -218,7 +218,7 @@ export function DriverProfilePage() {
     if (!driverId) return;
     const run = async () => {
       const from = (odometerPage - 1) * PAGE_SIZE;
-      const { data, error: e, count } = await supabase.from('odometer_readings').select('id, driver_id, vehicle_id, shift_id, reading, photo_path, captured_at, created_at, lat, lng', { count: 'exact' }).eq('driver_id', driverId).order('captured_at', { ascending: false }).range(from, from + PAGE_SIZE - 1);
+      const { data, error: e, count } = await supabase.from('odometer_readings_feed').select('id, driver_id, vehicle_id, shift_id, reading, photo_path, captured_at, created_at, lat, lng', { count: 'exact' }).eq('driver_id', driverId).order('captured_at', { ascending: false }).range(from, from + PAGE_SIZE - 1);
       if (e) { console.error(e); return; }
       setOdometerLogs(await Promise.all(((data as OdometerRow[]) ?? []).map(resolveOdometerPhoto)));
       setOdometerCount(count ?? 0);

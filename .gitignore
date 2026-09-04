@@ -5,3 +5,9 @@ dist-portal/
 *.zip
 .env.local
 portal/.env.local
+
+# Local env files -- publishable keys only, but keep config changes deliberate.
+.env
+admin-app/.env
+portal/.env
+!*.env.example

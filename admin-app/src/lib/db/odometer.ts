@@ -17,7 +17,7 @@ const COLUMNS = 'id, driver_id, vehicle_id, shift_id, reading, photo_path, captu
 
 export async function getLatestOdometerForVehicle(vehicleId: string): Promise<OdometerReading | null> {
   const { data, error } = await supabase
-    .from('odometer_readings')
+    .from('odometer_readings_feed')
     .select(COLUMNS)
     .eq('vehicle_id', vehicleId)
     .order('captured_at', { ascending: false })
@@ -29,7 +29,7 @@ export async function getLatestOdometerForVehicle(vehicleId: string): Promise<Od
 
 export async function getFirstOdometerForVehicle(vehicleId: string): Promise<OdometerReading | null> {
   const { data, error } = await supabase
-    .from('odometer_readings')
+    .from('odometer_readings_feed')
     .select(COLUMNS)
     .eq('vehicle_id', vehicleId)
     .order('captured_at', { ascending: true })
@@ -41,7 +41,7 @@ export async function getFirstOdometerForVehicle(vehicleId: string): Promise<Odo
 
 export async function getLatestOdometerForDriver(driverId: string): Promise<OdometerReading | null> {
   const { data, error } = await supabase
-    .from('odometer_readings')
+    .from('odometer_readings_feed')
     .select(COLUMNS)
     .eq('driver_id', driverId)
     .order('captured_at', { ascending: false })
@@ -58,7 +58,7 @@ export async function listOdometerByDriver(
 ): Promise<{ rows: OdometerReading[]; count: number }> {
   const from = (page - 1) * pageSize;
   const { data, error, count } = await supabase
-    .from('odometer_readings')
+    .from('odometer_readings_feed')
     .select(COLUMNS, { count: 'exact' })
     .eq('driver_id', driverId)
     .order('captured_at', { ascending: false })
@@ -74,7 +74,7 @@ export async function listOdometerByVehicle(
 ): Promise<{ rows: OdometerReading[]; count: number }> {
   const from = (page - 1) * pageSize;
   const { data, error, count } = await supabase
-    .from('odometer_readings')
+    .from('odometer_readings_feed')
     .select(COLUMNS, { count: 'exact' })
     .eq('vehicle_id', vehicleId)
     .order('captured_at', { ascending: false })
