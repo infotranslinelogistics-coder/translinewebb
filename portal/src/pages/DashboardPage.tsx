@@ -10,6 +10,7 @@ import { getDashboardStats, DashboardStats } from '@/lib/db/dashboard';
 import { supabase } from '@/lib/supabase';
 import { PERTH_TIME_LABEL } from '@/lib/dateTime';
 import { useInbox } from '@/contexts/InboxContext';
+import { RouteMap } from '@shared/components/RouteMap';
 
 function startOfToday(): Date {
   const d = new Date();
@@ -131,7 +132,7 @@ export function DashboardPage() {
         </div>
         <div className="flex items-center justify-center h-96">
           <div className="flex flex-col items-center gap-2">
-            <Loader className="w-8 h-8 text-[#FF6B35] animate-spin" />
+            <Loader className="w-8 h-8 text-[#BE1C2D] animate-spin" />
             <p className="text-gray-400">Loading dashboard...</p>
           </div>
         </div>
@@ -224,16 +225,31 @@ export function DashboardPage() {
 
       {/* Page header */}
       <div>
-        <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
-        <p className="text-gray-400">Overview of your fleet operations</p>
+        <p className="text-xs font-semibold uppercase tracking-[.14em] text-[#BE1C2D]">Perth operations</p>
+        <h1 className="portalShellTitle text-5xl font-bold text-[#17191B] mt-1">Dispatch board</h1>
+        <p className="text-gray-400 mt-2">Current fleet, shift and service position.</p>
       </div>
+
+      <section className="grid overflow-hidden border border-[#D7D3CA] bg-[#FFFEFA] lg:grid-cols-[.72fr_1.28fr]">
+        <div className="flex flex-col justify-between border-b border-[#D7D3CA] p-6 lg:border-b-0 lg:border-r">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[.12em] text-[#BE1C2D]">Network snapshot</p>
+            <h2 className="portalShellTitle mt-2 text-4xl font-bold text-[#17191B]">Active corridors</h2>
+            <p className="mt-3 max-w-sm text-sm leading-6 text-[#686B6F]">A shared network view for dispatch. Open Live Map for vehicle-level GPS and shift history.</p>
+          </div>
+          <Button onClick={() => navigate('/live-map')} variant="outline" className="mt-6 w-full justify-between rounded-none border-[#A6A6A6] text-[#17191B] hover:bg-[#F5F2EB]">Open live map <span aria-hidden="true">→</span></Button>
+        </div>
+        <div className="min-h-[340px] p-3 sm:p-5">
+          <RouteMap variant="portal" routeIds={['per-kal', 'per-hed', 'per-adl', 'per-mel']} />
+        </div>
+      </section>
 
       {/* Stats grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statsCards.map((stat) => {
           const Icon = stat.icon;
           return (
-            <Card key={stat.name} className="bg-[#161616] border-gray-800">
+            <Card key={stat.name} className="bg-[#FFFEFA] border-[#D7D3CA]">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -253,7 +269,7 @@ export function DashboardPage() {
 
       {/* Live Monitor Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div className="flex-1">
@@ -266,7 +282,7 @@ export function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div className="flex-1">
@@ -279,7 +295,7 @@ export function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div className="flex-1">
@@ -296,36 +312,36 @@ export function DashboardPage() {
 
       {/* Stats Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardHeader>
             <CardTitle className="text-white">Fleet Status</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex justify-between items-center p-3 bg-[#0F0F0F] rounded border border-gray-800">
+            <div className="flex justify-between items-center p-3 bg-[#F5F2EB] rounded border border-[#D7D3CA]">
               <span className="text-gray-300">Drivers on Active Shifts</span>
-              <span className="text-lg font-bold text-[#FF6B35]">{stats.activeDrivers}/{stats.totalDrivers}</span>
+              <span className="text-lg font-bold text-[#BE1C2D]">{stats.activeDrivers}/{stats.totalDrivers}</span>
             </div>
-            <div className="flex justify-between items-center p-3 bg-[#0F0F0F] rounded border border-gray-800">
+            <div className="flex justify-between items-center p-3 bg-[#F5F2EB] rounded border border-[#D7D3CA]">
               <span className="text-gray-300">Vehicles in Active Shifts</span>
-              <span className="text-lg font-bold text-[#FF6B35]">{stats.activeVehicles}/{stats.totalVehicles}</span>
+              <span className="text-lg font-bold text-[#BE1C2D]">{stats.activeVehicles}/{stats.totalVehicles}</span>
             </div>
-            <div className="flex justify-between items-center p-3 bg-[#0F0F0F] rounded border border-gray-800">
+            <div className="flex justify-between items-center p-3 bg-[#F5F2EB] rounded border border-[#D7D3CA]">
               <span className="text-gray-300">Shifts Active</span>
               <span className="text-lg font-bold text-green-400">{stats.activeShifts}</span>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardHeader>
             <CardTitle className="text-white">Maintenance Queue</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex justify-between items-center p-3 bg-[#0F0F0F] rounded border border-gray-800">
+            <div className="flex justify-between items-center p-3 bg-[#F5F2EB] rounded border border-[#D7D3CA]">
               <span className="text-gray-300">Vehicles in Maintenance</span>
               <span className="text-lg font-bold text-yellow-400">{stats.vehiclesInMaintenance}</span>
             </div>
-            <div className="flex justify-between items-center p-3 bg-[#0F0F0F] rounded border border-gray-800">
+            <div className="flex justify-between items-center p-3 bg-[#F5F2EB] rounded border border-[#D7D3CA]">
               <span className="text-gray-300">Pending Items</span>
               <span className="text-lg font-bold text-orange-400">{stats.pendingMaintenance}</span>
             </div>
@@ -334,7 +350,7 @@ export function DashboardPage() {
       </div>
 
       <Dialog open={serviceAlertOpen} onOpenChange={setServiceAlertOpen}>
-        <DialogContent className="bg-[#161616] border-gray-800 max-w-4xl">
+        <DialogContent className="bg-[#FFFEFA] border-[#D7D3CA] max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-white">Service due soon</DialogTitle>
             <DialogDescription className="text-gray-400">
@@ -350,7 +366,7 @@ export function DashboardPage() {
                 const itemId = notification.maintenance_item_id;
                 const busy = alertBusyId === itemId;
                 return (
-                  <div key={itemId} className="rounded-lg border border-gray-800 bg-[#0F0F0F] p-3">
+                  <div key={itemId} className="rounded-lg border border-[#D7D3CA] bg-[#F5F2EB] p-3">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-sm">
                       <div>
                         <p className="text-gray-500">Vehicle</p>
@@ -372,7 +388,7 @@ export function DashboardPage() {
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button
                         size="sm"
-                        className="bg-[#FF6B35] text-white hover:bg-[#E55A2B]"
+                        className="bg-[#BE1C2D] text-white hover:bg-[#A81828]"
                         disabled={busy}
                         onClick={() => acknowledge(itemId)}
                       >

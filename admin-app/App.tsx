@@ -32,9 +32,9 @@ function MainDrawer() {
         headerStyle: { backgroundColor: '#0B0B0B' },
         headerTintColor: '#FFFFFF',
         drawerStyle: { backgroundColor: '#0B0B0B' },
-        drawerActiveTintColor: '#FF6B35',
-        drawerInactiveTintColor: '#9CA3AF',
-        sceneStyle: { backgroundColor: '#0B0B0B' },
+        drawerActiveTintColor: '#E2485A',
+        drawerInactiveTintColor: '#A6A6A6',
+        sceneStyle: { backgroundColor: '#F5F2EB' },
       }}
     >
       <Drawer.Screen name="Dashboard" component={DashboardScreen} />
@@ -77,7 +77,7 @@ function RootNavigator() {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#0B0B0B', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#FF6B35" />
+        <ActivityIndicator color="#E2485A" />
       </View>
     );
   }

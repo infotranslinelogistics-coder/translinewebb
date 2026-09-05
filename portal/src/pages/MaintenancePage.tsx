@@ -319,7 +319,7 @@ export function MaintenancePage() {
         </div>
         <Button
           onClick={openCreateDialog}
-          className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
+          className="bg-[#BE1C2D] hover:bg-[#A81828] text-white"
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Service
@@ -327,7 +327,7 @@ export function MaintenancePage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-yellow-950 rounded-lg flex items-center justify-center">
@@ -340,7 +340,7 @@ export function MaintenancePage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-red-950 rounded-lg flex items-center justify-center">
@@ -353,7 +353,7 @@ export function MaintenancePage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-green-950 rounded-lg flex items-center justify-center">
@@ -366,7 +366,7 @@ export function MaintenancePage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-blue-950 rounded-lg flex items-center justify-center">
@@ -382,7 +382,7 @@ export function MaintenancePage() {
       </div>
 
       {serviceAlerts.length > 0 && (
-        <Card className="bg-[#161616] border-yellow-900">
+        <Card className="bg-[#FFFEFA] border-yellow-900">
           <CardHeader>
             <CardTitle className="text-yellow-300">Automatic Service Alerts</CardTitle>
             <CardDescription className="text-gray-400">
@@ -393,7 +393,7 @@ export function MaintenancePage() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">Vehicle rego</TableHead>
                     <TableHead className="text-gray-400">Reason</TableHead>
                     <TableHead className="text-gray-400">Current km</TableHead>
@@ -420,7 +420,7 @@ export function MaintenancePage() {
                           : `Due in ${Math.round(alert.km_remaining).toLocaleString()} km`;
 
                     return (
-                      <TableRow key={itemId} className="border-gray-800">
+                      <TableRow key={itemId} className="border-[#D7D3CA]">
                         <TableCell className="text-gray-200">{alert.vehicle_rego ?? alert.vehicle_id ?? 'Unknown'}</TableCell>
                         <TableCell className="text-gray-300 max-w-[22rem]">
                           <p className="line-clamp-2">{reason}</p>
@@ -438,7 +438,7 @@ export function MaintenancePage() {
                           <div className="flex items-center justify-end gap-2">
                             <Button
                               size="sm"
-                              className="bg-[#FF6B35] text-white hover:bg-[#E55A2B]"
+                              className="bg-[#BE1C2D] text-white hover:bg-[#A81828]"
                               disabled={busy}
                               onClick={() => handleAcknowledgeAlert(itemId)}
                             >
@@ -464,7 +464,7 @@ export function MaintenancePage() {
         </Card>
       )}
 
-      <Card className="bg-[#161616] border-gray-800">
+      <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -480,7 +480,7 @@ export function MaintenancePage() {
                 placeholder="Search service, vehicle, driver..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
+                className="pl-10 bg-[#F5F2EB] border-[#C4C0B7] text-white placeholder:text-gray-500"
               />
             </div>
           </div>
@@ -488,13 +488,13 @@ export function MaintenancePage() {
         <CardContent>
           {loading ? (
             <div className="flex justify-center py-8">
-              <Loader className="w-8 h-8 text-[#FF6B35] animate-spin" />
+              <Loader className="w-8 h-8 text-[#BE1C2D] animate-spin" />
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">Vehicle</TableHead>
                     <TableHead className="text-gray-400">Driver (optional)</TableHead>
                     <TableHead className="text-gray-400">Type of service</TableHead>
@@ -518,7 +518,7 @@ export function MaintenancePage() {
                       const rowDate = item.scheduled_date ?? item.service_date;
 
                       return (
-                        <TableRow key={item.id} className="border-gray-800">
+                        <TableRow key={item.id} className="border-[#D7D3CA]">
                           <TableCell className="text-gray-200 font-medium">
                             {vehicle ? getVehicleLabel(vehicle) : item.vehicle_id}
                           </TableCell>
@@ -576,7 +576,7 @@ export function MaintenancePage() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-[#161616] border-gray-800">
+        <DialogContent className="bg-[#FFFEFA] border-[#D7D3CA]">
           <DialogHeader>
             <DialogTitle className="text-white">{editingItem ? 'Edit Maintenance' : 'Add Maintenance'}</DialogTitle>
             <DialogDescription className="text-gray-400">
@@ -591,7 +591,7 @@ export function MaintenancePage() {
                 value={formData.vehicleId}
                 onValueChange={(value) => setFormData((prev) => ({ ...prev, vehicleId: value }))}
               >
-                <SelectTrigger className="bg-[#0F0F0F] border-gray-700 text-white">
+                <SelectTrigger className="bg-[#F5F2EB] border-[#C4C0B7] text-white">
                   <SelectValue placeholder="Select vehicle" />
                 </SelectTrigger>
                 <SelectContent>
@@ -610,7 +610,7 @@ export function MaintenancePage() {
                 value={formData.driverId}
                 onValueChange={(value) => setFormData((prev) => ({ ...prev, driverId: value }))}
               >
-                <SelectTrigger className="bg-[#0F0F0F] border-gray-700 text-white">
+                <SelectTrigger className="bg-[#F5F2EB] border-[#C4C0B7] text-white">
                   <SelectValue placeholder="No driver" />
                 </SelectTrigger>
                 <SelectContent>
@@ -630,7 +630,7 @@ export function MaintenancePage() {
                 value={formData.serviceType}
                 onChange={(e) => setFormData((prev) => ({ ...prev, serviceType: e.target.value }))}
                 placeholder="e.g., Oil change"
-                className="bg-[#0F0F0F] border-gray-700 text-white"
+                className="bg-[#F5F2EB] border-[#C4C0B7] text-white"
               />
             </div>
 
@@ -640,7 +640,7 @@ export function MaintenancePage() {
                 type="date"
                 value={formData.scheduledDate}
                 onChange={(e) => setFormData((prev) => ({ ...prev, scheduledDate: e.target.value }))}
-                className="bg-[#0F0F0F] border-gray-700 text-white"
+                className="bg-[#F5F2EB] border-[#C4C0B7] text-white"
               />
             </div>
 
@@ -650,7 +650,7 @@ export function MaintenancePage() {
                 value={formData.status}
                 onValueChange={(value) => setFormData((prev) => ({ ...prev, status: value as MaintenanceStatus }))}
               >
-                <SelectTrigger className="bg-[#0F0F0F] border-gray-700 text-white">
+                <SelectTrigger className="bg-[#F5F2EB] border-[#C4C0B7] text-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -663,7 +663,7 @@ export function MaintenancePage() {
 
             <Button
               onClick={handleSaveMaintenance}
-              className="w-full bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
+              className="w-full bg-[#BE1C2D] hover:bg-[#A81828] text-white"
             >
               {editingItem ? 'Save changes' : 'Add maintenance'}
             </Button>
@@ -672,7 +672,7 @@ export function MaintenancePage() {
       </Dialog>
 
       <AlertDialog open={deleteDialog} onOpenChange={setDeleteDialog}>
-        <AlertDialogContent className="bg-[#161616] border-gray-800">
+        <AlertDialogContent className="bg-[#FFFEFA] border-[#D7D3CA]">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">Delete Maintenance Item</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">

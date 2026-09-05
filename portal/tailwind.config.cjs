@@ -1,9 +1,12 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}', '../src/components/RouteMap/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
+        brand: { raw: '#BE1C2D', primary: '#BE1C2D', 'primary-bright': '#E2485A', secondary: '#A6A6A6' },
+        surface: { dark: '#0B0C0D', 'dark-raised': '#141618', light: '#F5F2EB', white: '#FFFEFA' },
+        signal: { success: '#18794E', warning: '#A86408', error: '#A61B29' },
         border: 'var(--border)',
         input: 'var(--input)',
         ring: 'var(--ring)',
@@ -54,6 +57,7 @@ module.exports = {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
+        display: ['"Barlow Condensed"', 'Arial Narrow', 'sans-serif'],
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
     },

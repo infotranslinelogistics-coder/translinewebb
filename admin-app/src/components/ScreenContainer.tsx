@@ -20,8 +20,8 @@ export default function ScreenContainer({ title, subtitle, children }: ScreenCon
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#0B0B0B' },
+  safeArea: { flex: 1, backgroundColor: '#F5F2EB' },
   container: { flex: 1, padding: 16 },
-  title: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', marginBottom: 2 },
-  subtitle: { fontSize: 13, color: '#9CA3AF', marginBottom: 16 },
+  title: { fontSize: 24, fontWeight: '800', color: '#17191B', marginBottom: 2, textTransform: 'uppercase', letterSpacing: -0.4 },
+  subtitle: { fontSize: 13, color: '#686B6F', marginBottom: 16 },
 });

@@ -643,7 +643,7 @@ export function ShiftDetailsPage() {
           </Button>
           <Button
             variant="default"
-            className="bg-[#FF6B35] text-white hover:bg-[#e55a25]"
+            className="bg-[#BE1C2D] text-white hover:bg-[#e55a25]"
             onClick={() => navigate('/shifts')}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -654,29 +654,29 @@ export function ShiftDetailsPage() {
 
       {loading ? (
         <div className="flex justify-center py-12">
-          <Loader className="w-8 h-8 text-[#FF6B35] animate-spin" />
+          <Loader className="w-8 h-8 text-[#BE1C2D] animate-spin" />
         </div>
       ) : error ? (
         <Card className="bg-red-950 border-red-900">
           <CardContent className="p-4 text-red-400">{error}</CardContent>
         </Card>
       ) : !shift ? (
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6 text-gray-400">Shift not found</CardContent>
         </Card>
       ) : (
         <>
-          <Card className="bg-[#161616] border-gray-800">
+          <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
             <CardHeader>
               <CardTitle className="text-white">Overview</CardTitle>
               <CardDescription className="text-gray-400">Shift id: {shift.id} · {PERTH_TIME_LABEL}</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-              <div className="rounded-lg bg-[#0F0F0F] border border-gray-800 px-3 py-2">
+              <div className="rounded-lg bg-[#F5F2EB] border border-[#D7D3CA] px-3 py-2">
                 <p className="text-xs text-gray-500">Driver</p>
                 <p className="text-sm text-gray-100 truncate">{shift.driver_name ?? 'Unknown driver'}</p>
               </div>
-              <div className="rounded-lg bg-[#0F0F0F] border border-gray-800 px-3 py-2">
+              <div className="rounded-lg bg-[#F5F2EB] border border-[#D7D3CA] px-3 py-2">
                 <p className="text-xs text-gray-500">Vehicle</p>
                 <p className="text-sm text-gray-100 truncate">{shift.vehicle_rego ?? 'Unknown vehicle'}</p>
                 {shift.vehicle_id && (
@@ -690,21 +690,21 @@ export function ShiftDetailsPage() {
                   </Button>
                 )}
               </div>
-              <div className="rounded-lg bg-[#0F0F0F] border border-gray-800 px-3 py-2">
+              <div className="rounded-lg bg-[#F5F2EB] border border-[#D7D3CA] px-3 py-2">
                 <p className="text-xs text-gray-500">Status</p>
-                <Badge className="mt-1 bg-gray-800 text-gray-200 border-gray-700 capitalize">
+                <Badge className="mt-1 bg-gray-800 text-gray-200 border-[#C4C0B7] capitalize">
                   {shift.status ?? 'unknown'}
                 </Badge>
               </div>
-              <div className="rounded-lg bg-[#0F0F0F] border border-gray-800 px-3 py-2">
+              <div className="rounded-lg bg-[#F5F2EB] border border-[#D7D3CA] px-3 py-2">
                 <p className="text-xs text-gray-500">Started</p>
                 <p className="text-sm text-gray-100">{formatTimestamp(shift.started_at)}</p>
               </div>
-              <div className="rounded-lg bg-[#0F0F0F] border border-gray-800 px-3 py-2">
+              <div className="rounded-lg bg-[#F5F2EB] border border-[#D7D3CA] px-3 py-2">
                 <p className="text-xs text-gray-500">Ended</p>
                 <p className="text-sm text-gray-100">{formatTimestamp(shift.ended_at)}</p>
               </div>
-              <div className="rounded-lg bg-[#0F0F0F] border border-gray-800 px-3 py-2">
+              <div className="rounded-lg bg-[#F5F2EB] border border-[#D7D3CA] px-3 py-2">
                 <p className="text-xs text-gray-500">Location updates</p>
                 <p className="text-sm text-gray-100">{locationCount}</p>
               </div>
@@ -712,7 +712,7 @@ export function ShiftDetailsPage() {
           </Card>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <Card className="bg-[#161616] border-gray-800 xl:col-span-2">
+            <Card className="bg-[#FFFEFA] border-[#D7D3CA] xl:col-span-2">
               <CardHeader>
                 <CardTitle className="text-white">Timeline</CardTitle>
                 <CardDescription className="text-gray-400">Chronological event history in {PERTH_TIME_LABEL}</CardDescription>
@@ -723,7 +723,7 @@ export function ShiftDetailsPage() {
                 ) : (
                   <div className="space-y-2">
                     {timelineEvents.map((event) => (
-                      <div key={event.id} className="rounded-lg border border-gray-800 bg-[#0F0F0F] px-3 py-2">
+                      <div key={event.id} className="rounded-lg border border-[#D7D3CA] bg-[#F5F2EB] px-3 py-2">
                         <div className="flex items-center justify-between gap-4">
                           <p className="text-sm text-gray-200">
                             {event.event_type === 'location_summary'
@@ -745,14 +745,14 @@ export function ShiftDetailsPage() {
             </Card>
 
             <div className="space-y-4">
-              <Card className="bg-[#161616] border-gray-800">
+              <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
                 <CardHeader>
                   <CardTitle className="text-white">Odometer & Fuel</CardTitle>
                   <CardDescription className="text-gray-400">Odometer start/end from shift events and fuel log summary in {PERTH_TIME_LABEL}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">Start KM</p>
                       <p className="text-gray-200 text-sm">
                         {shiftOdometer.start?.value != null
@@ -761,7 +761,7 @@ export function ShiftDetailsPage() {
                       </p>
                       <p className="mt-1 text-[11px] text-gray-500">{formatTimestamp(shiftOdometer.start?.created_at)}</p>
                     </div>
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">End KM</p>
                       <p className="text-gray-200 text-sm">
                         {shiftOdometer.end?.value != null
@@ -772,7 +772,7 @@ export function ShiftDetailsPage() {
                       </p>
                       <p className="mt-1 text-[11px] text-gray-500">{formatTimestamp(shiftOdometer.end?.created_at)}</p>
                     </div>
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">Distance</p>
                       <p className="text-gray-200 text-sm">
                         {shiftOdometer.distanceDriven != null
@@ -784,19 +784,19 @@ export function ShiftDetailsPage() {
                             : 'Pending'}
                       </p>
                     </div>
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">Fuel Logs</p>
                       <p className="text-gray-200 text-sm">{shiftOdometer.totalFuelLogs}</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">Start Location</p>
                       <p className="text-gray-200 text-sm">
                         {formatCoordinateText(shiftOdometer.start?.latitude, shiftOdometer.start?.longitude)}
                       </p>
                     </div>
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">End Location</p>
                       <p className="text-gray-200 text-sm">
                         {formatCoordinateText(shiftOdometer.end?.latitude, shiftOdometer.end?.longitude)}
@@ -804,7 +804,7 @@ export function ShiftDetailsPage() {
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">Start Photo</p>
                       {startOdometerPhotoUrl ? (
                         <a href={startOdometerPhotoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm">
@@ -814,7 +814,7 @@ export function ShiftDetailsPage() {
                         <p className="text-gray-200 text-sm">No photo</p>
                       )}
                     </div>
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">End Photo</p>
                       {endOdometerPhotoUrl ? (
                         <a href={endOdometerPhotoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm">
@@ -825,7 +825,7 @@ export function ShiftDetailsPage() {
                       )}
                     </div>
                   </div>
-                  <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2 text-xs">
+                  <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2 text-xs">
                     <p className="text-gray-500">Fuel Summary</p>
                     <p className="text-gray-200 text-sm">
                       {shiftOdometer.totalFuelLogs > 0
@@ -838,7 +838,7 @@ export function ShiftDetailsPage() {
                   ) : (
                     <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                       {shiftOdometer.fuelRows.slice().reverse().map((fuelRow) => (
-                        <div key={fuelRow.id} className="rounded bg-[#0F0F0F] border border-gray-800 p-2 text-xs">
+                        <div key={fuelRow.id} className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2 text-xs">
                           <div className="flex items-center justify-between">
                             <p className="text-gray-300">{fuelRow.stationName ?? 'Fuel Log'}</p>
                             <p className="text-gray-500">{formatTimestamp(fuelRow.created_at)}</p>
@@ -853,14 +853,14 @@ export function ShiftDetailsPage() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-[#161616] border-gray-800">
+              <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
               <CardHeader>
                   <CardTitle className="text-white">Break Summary</CardTitle>
                   <CardDescription className="text-gray-400">Break sessions from shift events in {PERTH_TIME_LABEL}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">Break status</p>
                       <p className="mt-1 text-sm text-gray-200">
                         {breakSummary.isOnBreak
@@ -870,29 +870,29 @@ export function ShiftDetailsPage() {
                             : 'No break taken'}
                       </p>
                     </div>
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">Raw break time taken</p>
                       <p className="mt-1 text-sm text-gray-200">{formatDuration(breakSummary.rawBreakSeconds)}</p>
                     </div>
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">Allowed break time</p>
                       <p className="mt-1 text-sm text-gray-200">{formatDuration(breakSummary.allowanceSeconds)}</p>
                     </div>
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">Allowance status</p>
                       <p className={`mt-1 text-sm ${breakSummary.status === 'exceeded' ? 'text-red-400' : 'text-green-400'}`}>
                         {breakSummary.status === 'exceeded' ? 'Exceeded allowance' : 'Within allowance'}
                       </p>
                     </div>
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">Break start time</p>
                       <p className="mt-1 text-sm text-gray-200">{formatTimestamp(breakSummary.latestBreakStartAt)}</p>
                     </div>
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">Break end time</p>
                       <p className="mt-1 text-sm text-gray-200">{formatTimestamp(breakSummary.latestBreakEndAt)}</p>
                     </div>
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">Current/last break duration</p>
                       <p className="mt-1 text-sm text-gray-200">
                         {breakSummary.isOnBreak
@@ -902,11 +902,11 @@ export function ShiftDetailsPage() {
                             : '—'}
                       </p>
                     </div>
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">Working time (minus max 30m break)</p>
                       <p className="mt-1 text-sm text-gray-200">{formatDuration(workingSeconds)}</p>
                     </div>
-                    <div className="rounded bg-[#0F0F0F] border border-gray-800 p-2">
+                    <div className="rounded bg-[#F5F2EB] border border-[#D7D3CA] p-2">
                       <p className="text-gray-500">Break sessions</p>
                       <p className="mt-1 text-sm text-gray-200">{breakSummary.sessions.length}</p>
                     </div>
@@ -933,10 +933,10 @@ export function ShiftDetailsPage() {
                   {breakSummary.sessions.length === 0 ? (
                     <p className="text-xs text-gray-500">No break taken</p>
                   ) : (
-                    <div className="rounded border border-gray-800 overflow-hidden">
+                    <div className="rounded border border-[#D7D3CA] overflow-hidden">
                       <Table>
                         <TableHeader>
-                          <TableRow className="border-gray-800 hover:bg-transparent">
+                          <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                             <TableHead className="text-gray-400">Start</TableHead>
                             <TableHead className="text-gray-400">End</TableHead>
                             <TableHead className="text-gray-400">Duration</TableHead>
@@ -944,7 +944,7 @@ export function ShiftDetailsPage() {
                         </TableHeader>
                         <TableBody>
                           {breakSummary.sessions.map((session, index) => (
-                            <TableRow key={`${session.startAt}-${index}`} className="border-gray-800">
+                            <TableRow key={`${session.startAt}-${index}`} className="border-[#D7D3CA]">
                               <TableCell className="text-gray-300 text-xs">{formatTimestamp(session.startAt)}</TableCell>
                               <TableCell className="text-gray-300 text-xs">
                                 {session.endAt ? formatTimestamp(session.endAt) : 'On break'}
@@ -959,7 +959,7 @@ export function ShiftDetailsPage() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-[#161616] border-gray-800">
+              <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
                 <CardHeader>
                 <CardTitle className="text-white">Checklist</CardTitle>
                 <CardDescription className="text-gray-400">Latest submitted checklist answers</CardDescription>
@@ -970,7 +970,7 @@ export function ShiftDetailsPage() {
                 ) : (
                   <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
                     {checklistItems.map((item) => (
-                      <div key={item.key} className="rounded-lg border border-gray-800 bg-[#0F0F0F] px-3 py-2 text-xs">
+                      <div key={item.key} className="rounded-lg border border-[#D7D3CA] bg-[#F5F2EB] px-3 py-2 text-xs">
                         <div className="flex justify-between gap-3">
                           <span className="text-gray-300">{item.label}</span>
                           <span
@@ -995,7 +995,7 @@ export function ShiftDetailsPage() {
             </Card>
             </div>
 
-            <Card className="bg-[#161616] border-gray-800 xl:col-span-3">
+            <Card className="bg-[#FFFEFA] border-[#D7D3CA] xl:col-span-3">
               <CardHeader>
                 <CardTitle className="text-white">GPS Route</CardTitle>
                 <CardDescription className="text-gray-400">Location points from shift events in {PERTH_TIME_LABEL}</CardDescription>
@@ -1034,7 +1034,7 @@ export function ShiftDetailsPage() {
                         {lastStopRecorded ? 'Last Stop' : 'No stops recorded'}
                       </Button>
                     </div>
-                    <div ref={mapRef} className="w-full h-[360px] rounded-lg border border-gray-800 overflow-hidden" />
+                    <div ref={mapRef} className="w-full h-[360px] rounded-lg border border-[#D7D3CA] overflow-hidden" />
                     <p className="text-xs text-gray-500">
                       {locationEvents.length} points from {formatTimestamp(locationEvents[0]?.created_at)} to {formatTimestamp(locationEvents[locationEvents.length - 1]?.created_at)}
                     </p>
@@ -1047,7 +1047,7 @@ export function ShiftDetailsPage() {
       )}
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="bg-[#161616] border-gray-800">
+        <AlertDialogContent className="bg-[#FFFEFA] border-[#D7D3CA]">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">Delete Shift</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">

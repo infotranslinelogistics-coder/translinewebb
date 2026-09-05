@@ -565,7 +565,7 @@ export function DriversPage() {
         </div>
         <Button
           onClick={() => setDialogOpen(true)}
-          className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
+          className="bg-[#BE1C2D] hover:bg-[#A81828] text-white"
         >
           <UserPlus className="w-4 h-4 mr-2" />
           Add Driver
@@ -574,19 +574,19 @@ export function DriversPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Total Drivers</p>
             <p className="text-3xl font-bold text-white">{loading ? '-' : totalCount}</p>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Active Drivers</p>
             <p className="text-3xl font-bold text-green-400">{loading ? '-' : activeCount}</p>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Offline</p>
             <p className="text-3xl font-bold text-blue-400">
@@ -597,7 +597,7 @@ export function DriversPage() {
       </div>
 
       {/* Drivers table */}
-      <Card className="bg-[#161616] border-gray-800">
+      <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -613,7 +613,7 @@ export function DriversPage() {
                 placeholder="Search drivers..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
+                className="pl-10 bg-[#F5F2EB] border-[#C4C0B7] text-white placeholder:text-gray-500"
               />
             </div>
           </div>
@@ -621,13 +621,13 @@ export function DriversPage() {
         <CardContent>
           {loading ? (
             <div className="flex justify-center py-8">
-              <Loader className="w-8 h-8 text-[#FF6B35] animate-spin" />
+              <Loader className="w-8 h-8 text-[#BE1C2D] animate-spin" />
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">Driver</TableHead>
                     <TableHead className="text-gray-400">Shift Duration</TableHead>
                     <TableHead className="text-gray-400">Status</TableHead>
@@ -652,7 +652,7 @@ export function DriversPage() {
                         const activeShift = driverId ? activeShiftMap[driverId] : undefined;
                         const isOnBreak = activeShift ? Boolean(breakByShiftId[activeShift.id]) : false;
                         return (
-                          <TableRow key={driver.driver_id ?? driverId} className="border-gray-800">
+                          <TableRow key={driver.driver_id ?? driverId} className="border-[#D7D3CA]">
                             <TableCell className="font-medium text-white">
                               <div>
                                 <p>{driver.full_name ?? driver.profile_email ?? driver.email ?? driver.driver_id}</p>
@@ -668,14 +668,14 @@ export function DriversPage() {
                                   {status.status_state}
                                 </Badge>
                               ) : (
-                                <Badge className="bg-gray-900 text-gray-300 border-gray-700">Unknown</Badge>
+                                <Badge className="bg-gray-900 text-gray-300 border-[#C4C0B7]">Unknown</Badge>
                               )}
                             </TableCell>
                             <TableCell>
                               {isOnBreak ? (
                                 <Badge className="bg-amber-950 text-amber-300 border-amber-800">On Break</Badge>
                               ) : (
-                                <Badge className="bg-gray-900 text-gray-300 border-gray-700">No</Badge>
+                                <Badge className="bg-gray-900 text-gray-300 border-[#C4C0B7]">No</Badge>
                               )}
                             </TableCell>
                             <TableCell className="text-gray-300">
@@ -685,7 +685,7 @@ export function DriversPage() {
                               {activeShift ? (
                                 <Badge className="bg-blue-950 text-blue-300 border-blue-800">On Shift</Badge>
                               ) : (
-                                <Badge className="bg-gray-900 text-gray-300 border-gray-700">Off Shift</Badge>
+                                <Badge className="bg-gray-900 text-gray-300 border-[#C4C0B7]">Off Shift</Badge>
                               )}
                             </TableCell>
                             <TableCell>
@@ -715,7 +715,7 @@ export function DriversPage() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="text-gray-400 hover:text-[#FF6B35] h-8 w-8 p-0"
+                                  className="text-gray-400 hover:text-[#BE1C2D] h-8 w-8 p-0"
                                   onClick={() => {
                                     setPasswordDriver(driver);
                                     setPasswordDialogOpen(true);
@@ -740,7 +740,7 @@ export function DriversPage() {
                   )}
                       {/* Edit Vehicle Assignment Dialog */}
                       <Dialog open={isVehicleModalOpen} onOpenChange={setIsVehicleModalOpen}>
-                        <DialogContent className="bg-[#161616] border-gray-800">
+                        <DialogContent className="bg-[#FFFEFA] border-[#D7D3CA]">
                           <DialogHeader>
                             <DialogTitle className="text-white">Change Assigned Vehicle</DialogTitle>
                             <DialogDescription className="text-gray-400">
@@ -754,7 +754,7 @@ export function DriversPage() {
                                 id="vehicle-assignment-select"
                                 value={String(selectedVehicleId || '')}
                                 onChange={(e) => setSelectedVehicleId(String(e.target.value))}
-                                className="w-full bg-[#0F0F0F] border border-gray-700 text-white p-2 rounded"
+                                className="w-full bg-[#F5F2EB] border border-[#C4C0B7] text-white p-2 rounded"
                               >
                                 <option value="">None</option>
                                 {vehicles.map((vehicle) => {
@@ -779,7 +779,7 @@ export function DriversPage() {
                             <Button
                               onClick={saveVehicleAssignment}
                               disabled={isSavingVehicle}
-                              className="w-full bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
+                              className="w-full bg-[#BE1C2D] hover:bg-[#A81828] text-white"
                             >
                               {isSavingVehicle ? 'Saving...' : 'Save'}
                             </Button>
@@ -795,7 +795,7 @@ export function DriversPage() {
 
       {/* Set Driver Password Dialog */}
       <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
-        <DialogContent className="bg-[#161616] border-gray-800">
+        <DialogContent className="bg-[#FFFEFA] border-[#D7D3CA]">
           <DialogHeader>
             <DialogTitle className="text-white">Set Driver Password</DialogTitle>
             <DialogDescription className="text-gray-400">
@@ -811,7 +811,7 @@ export function DriversPage() {
             </div>
             <Button
               onClick={handlePasswordReset}
-              className="w-full bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
+              className="w-full bg-[#BE1C2D] hover:bg-[#A81828] text-white"
               disabled={passwordSaving}
             >
               {passwordSaving ? 'Sending...' : 'Send Reset Link'}
@@ -822,7 +822,7 @@ export function DriversPage() {
 
       {/* Add Driver Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-[#161616] border-gray-800">
+        <DialogContent className="bg-[#FFFEFA] border-[#D7D3CA]">
           <DialogHeader>
             <DialogTitle className="text-white">Add Driver</DialogTitle>
             <DialogDescription className="text-gray-400">
@@ -836,7 +836,7 @@ export function DriversPage() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="John Smith"
-                className="bg-[#0F0F0F] border-gray-700 text-white"
+                className="bg-[#F5F2EB] border-[#C4C0B7] text-white"
               />
             </div>
             <div>
@@ -846,7 +846,7 @@ export function DriversPage() {
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="john@example.com"
-                className="bg-[#0F0F0F] border-gray-700 text-white"
+                className="bg-[#F5F2EB] border-[#C4C0B7] text-white"
               />
             </div>
             <div>
@@ -856,7 +856,7 @@ export function DriversPage() {
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 placeholder="Password"
-                className="bg-[#0F0F0F] border-gray-700 text-white"
+                className="bg-[#F5F2EB] border-[#C4C0B7] text-white"
               />
             </div>
             <div>
@@ -865,12 +865,12 @@ export function DriversPage() {
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 placeholder="+1 234-567-8900"
-                className="bg-[#0F0F0F] border-gray-700 text-white"
+                className="bg-[#F5F2EB] border-[#C4C0B7] text-white"
               />
             </div>
             <Button
               onClick={handleAddDriver}
-              className="w-full bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
+              className="w-full bg-[#BE1C2D] hover:bg-[#A81828] text-white"
             >
               Create Driver
             </Button>
@@ -880,7 +880,7 @@ export function DriversPage() {
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialog} onOpenChange={setDeleteDialog}>
-        <AlertDialogContent className="bg-[#161616] border-gray-800">
+        <AlertDialogContent className="bg-[#FFFEFA] border-[#D7D3CA]">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">Delete Driver</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">

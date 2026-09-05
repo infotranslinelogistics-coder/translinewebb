@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
   error: { color: COLORS.red, fontSize: 12, marginBottom: 8 },
   fieldLabel: { color: COLORS.muted, fontSize: 12, marginBottom: 4 },
   statusPicker: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  statusOpt: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 999, backgroundColor: '#0F0F0F', borderWidth: 1, borderColor: COLORS.border },
+  statusOpt: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 999, backgroundColor: '#FFFEFA', borderWidth: 1, borderColor: COLORS.border },
   statusOptActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   statusOptText: { color: COLORS.muted, fontSize: 13, fontWeight: '600', textTransform: 'capitalize' },
   option: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },

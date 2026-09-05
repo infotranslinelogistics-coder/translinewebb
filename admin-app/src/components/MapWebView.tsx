@@ -58,7 +58,7 @@ function buildHtml(props: MapWebViewProps): string {
     markers.map((m) => ({
       lat: m.lat,
       lng: m.lng,
-      color: m.color ?? '#FF6B35',
+      color: m.color ?? '#BE1C2D',
       radius: m.radius ?? 9,
       label: m.label ? escapeText(m.label) : null,
       heading: m.heading ?? null,

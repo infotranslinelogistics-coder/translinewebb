@@ -13,22 +13,22 @@ import {
 } from 'react-native';
 
 export const COLORS = {
-  bg: '#0B0B0B',
-  card: '#161616',
-  border: '#262626',
-  accent: '#FF6B35',
-  text: '#FFFFFF',
-  muted: '#9CA3AF',
-  subtle: '#6B7280',
-  green: '#22C55E',
-  greenBg: '#052e16',
-  red: '#F87171',
-  redBg: '#450a0a',
-  yellow: '#FBBF24',
-  yellowBg: '#422006',
-  blue: '#60A5FA',
-  blueBg: '#0c1f3a',
-  purple: '#A78BFA',
+  bg: '#F5F2EB',
+  card: '#FFFEFA',
+  border: '#D7D3CA',
+  accent: '#BE1C2D',
+  text: '#17191B',
+  muted: '#686B6F',
+  subtle: '#777A7D',
+  green: '#18794E',
+  greenBg: '#E7F4EC',
+  red: '#A61B29',
+  redBg: '#FBE9E9',
+  yellow: '#A86408',
+  yellowBg: '#F8EEDC',
+  blue: '#315F8A',
+  blueBg: '#E8EFF5',
+  purple: '#654B8E',
 };
 
 export function Card({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
@@ -67,13 +67,13 @@ export function Badge({
   variant?: 'gray' | 'green' | 'red' | 'yellow' | 'blue' | 'purple' | 'accent';
 }) {
   const map: Record<string, { bg: string; fg: string }> = {
-    gray: { bg: '#1f2937', fg: '#9CA3AF' },
+    gray: { bg: '#E7E4DC', fg: '#686B6F' },
     green: { bg: COLORS.greenBg, fg: COLORS.green },
     red: { bg: COLORS.redBg, fg: COLORS.red },
     yellow: { bg: COLORS.yellowBg, fg: COLORS.yellow },
     blue: { bg: COLORS.blueBg, fg: COLORS.blue },
-    purple: { bg: '#2e1065', fg: COLORS.purple },
-    accent: { bg: '#3a1c0d', fg: COLORS.accent },
+    purple: { bg: '#EFEAF5', fg: COLORS.purple },
+    accent: { bg: '#F8E4E6', fg: COLORS.accent },
   };
   const c = map[variant] ?? map.gray;
   return (
@@ -100,7 +100,7 @@ export function Btn({
 }) {
   const bg: Record<string, string> = {
     primary: COLORS.accent,
-    secondary: '#262626',
+    secondary: '#35383B',
     danger: '#7F1D1D',
     success: '#166534',
     ghost: 'transparent',
@@ -200,13 +200,13 @@ export function Pager({
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 12 },
+  card: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderWidth: 1, borderRadius: 4, padding: 14, marginBottom: 12 },
   sectionTitle: { color: COLORS.text, fontSize: 15, fontWeight: '700', marginBottom: 8 },
   statCard: {
     backgroundColor: COLORS.card,
     borderColor: COLORS.border,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 4,
     padding: 12,
     flexGrow: 1,
     flexBasis: '47%',
@@ -215,18 +215,18 @@ const styles = StyleSheet.create({
   statLabel: { color: COLORS.muted, fontSize: 11, marginBottom: 6 },
   statValue: { fontSize: 24, fontWeight: '800' },
   statSub: { color: COLORS.subtle, fontSize: 11, marginTop: 4 },
-  badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
+  badge: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
   badgeText: { fontSize: 11, fontWeight: '700' },
-  btn: { backgroundColor: COLORS.accent, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
+  btn: { backgroundColor: COLORS.accent, borderRadius: 4, paddingHorizontal: 14, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
   btnSmall: { paddingHorizontal: 10, paddingVertical: 6 },
   btnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
   field: { marginBottom: 10 },
   fieldLabel: { color: COLORS.muted, fontSize: 12, marginBottom: 4 },
   input: {
-    backgroundColor: '#0F0F0F',
+    backgroundColor: COLORS.card,
     borderColor: COLORS.border,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 4,
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: COLORS.text,
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
   kvVal: { color: COLORS.text, fontSize: 13, fontWeight: '600', flexShrink: 1, textAlign: 'right' },
   empty: { color: COLORS.muted, fontSize: 13, marginTop: 8 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: COLORS.card, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, maxHeight: '85%', borderTopWidth: 1, borderColor: COLORS.border },
+  modalCard: { backgroundColor: COLORS.card, borderTopLeftRadius: 6, borderTopRightRadius: 6, padding: 16, maxHeight: '85%', borderTopWidth: 1, borderColor: COLORS.border },
   modalTitle: { color: COLORS.text, fontSize: 18, fontWeight: '700', marginBottom: 12 },
   pager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   pagerText: { color: COLORS.subtle, fontSize: 12 },

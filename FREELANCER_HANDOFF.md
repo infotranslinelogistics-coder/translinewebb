@@ -76,3 +76,30 @@ The stack is React + Vite + TypeScript. The portal uses Supabase for auth and da
 - Keep fixes minimal and schema-aware
 - Prefer direct validation after each UI/data change
 - Avoid adding docs unless explicitly requested
+
+## Unified visual rebuild — 2026-09-06
+
+The rebuild lives on `codex/unified-platform-rebuild`, branched from `claude/ecstatic-volta-okova0`.
+
+Completed in this pass:
+
+- Sampled the committed logo: red `#BE1C2D`, grey `#A6A6A6`, white `#FFFFFF`.
+- Added named Tailwind brand/surface/neutral/signal tokens and the documented type scale.
+- Added local Latin WOFF2 files for Barlow Condensed (display) and Inter (body/UI).
+- Rebuilt the marketing home experience around the shared, data-driven `src/components/RouteMap/` component.
+- RouteMap supports `hero`, `portal`, and `tracking` variants, hub interaction, service filters, route drawing, `requestAnimationFrame` travellers, and reduced motion.
+- Rebuilt the marketing sections: service capability, coverage, fleet, process, tracking handoff, quote request, operations facts, and footer.
+- Flipped portal work surfaces to warm light while retaining the dark navigation shell; replaced the orange accent with the sampled Transline red and tightened cards/tables.
+- Rebuilt the portal sign-in surface and added the shared route network to the authenticated dispatch dashboard.
+- Updated the React Native admin shell to the same light work surface, dark navigation and brand/signal tokens.
+- Updated the iOS splash/status-bar colours to the dark Transline shell.
+- Added a branded Open Graph card and matching page metadata.
+
+Deferred / requires operations input:
+
+- Confirm the public fleet figures (four vehicle classes, 14-tonne top listed capacity, company-owned fleet) before production publishing.
+- Commission real depot, driver, container and road-train photography. The rebuild intentionally uses no stock photography.
+- Connect RouteMap route/customer filters to Supabase. The current route set is configuration-driven; vehicle-level GPS remains in the existing Live Map.
+- Add shipment-position interpolation between driver GPS pings once shipment-to-shift/vehicle mapping is available.
+- Full driver iOS UX rebuild remains separate. This pass covers shell colours, splash and status bar only.
+- The tracked `app-sync.patch` and `my_changes.patch` target older file layouts and do not apply cleanly in either direction on this branch. They were reviewed and preserved unchanged.

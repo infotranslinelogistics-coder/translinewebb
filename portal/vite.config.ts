@@ -22,6 +22,7 @@ export default defineConfig({
     alias: {
       // Alias @ to the src directory
       '@': path.resolve(__dirname, './src'),
+      '@shared': path.resolve(__dirname, '../src'),
       react: path.resolve(portalNodeModules, 'react'),
       'react/jsx-runtime': path.resolve(portalNodeModules, 'react/jsx-runtime.js'),
       'react/jsx-dev-runtime': path.resolve(portalNodeModules, 'react/jsx-dev-runtime.js'),
@@ -30,5 +31,8 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+  },
+  server: {
+    fs: { allow: [path.resolve(__dirname, '..')] },
   },
 })
