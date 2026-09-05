@@ -43,9 +43,9 @@ export function LoginPage() {
           <RouteMap variant="portal" theme="dark" />
         </div>
         <div className="relative z-10 max-w-xl">
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[.16em] text-[#E2485A]">Operations portal</p>
-          <h1 className="portalShellTitle text-[clamp(4rem,7vw,7.5rem)] font-bold leading-[.78] text-white">Every load.<br />One view.</h1>
-          <p className="mt-7 max-w-md text-base leading-7 text-[#A6A6A6]">Shifts, vehicles, service events and live locations — tied back to the work.</p>
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[.16em] text-[#E2485A]">Admin portal</p>
+          <h1 className="portalShellTitle text-[clamp(4rem,7vw,7.5rem)] font-bold leading-[.78] text-white">Every driver.<br />One view.</h1>
+          <p className="mt-7 max-w-md text-base leading-7 text-[#A6A6A6]">Track driver locations, assigned vehicles, active shifts and route history.</p>
         </div>
       </section>
 
@@ -54,8 +54,8 @@ export function LoginPage() {
           <img src={logo} alt="Transline Logistics" className="mb-12 w-52 lg:hidden" />
           <div className="mb-10">
             <p className="mb-3 text-xs font-semibold uppercase tracking-[.14em] text-[#BE1C2D]">Secure access</p>
-            <h2 className="portalShellTitle text-5xl font-bold leading-none text-[#17191B]">Sign in to dispatch.</h2>
-            <p className="mt-4 text-sm leading-6 text-[#686B6F]">Use your approved Transline account.</p>
+            <h2 className="portalShellTitle text-5xl font-bold leading-none text-[#17191B]">Sign in to operations.</h2>
+            <p className="mt-4 text-sm leading-6 text-[#686B6F]">Use your approved Transline admin account.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">

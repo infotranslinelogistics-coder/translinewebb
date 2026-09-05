@@ -99,7 +99,7 @@ Deferred / requires operations input:
 
 - Confirm the public fleet figures (four vehicle classes, 14-tonne top listed capacity, company-owned fleet) before production publishing.
 - Commission real depot, driver, container and road-train photography. The rebuild intentionally uses no stock photography.
-- Connect RouteMap route/customer filters to Supabase. The current route set is configuration-driven; vehicle-level GPS remains in the existing Live Map.
+- Connect RouteMap driver/vehicle filters to Supabase. The current route set is configuration-driven; vehicle-level GPS remains in the existing Live Map.
 - Add shipment-position interpolation between driver GPS pings once shipment-to-shift/vehicle mapping is available.
 - Full driver iOS UX rebuild remains separate. This pass covers shell colours, splash and status bar only.
 - The tracked `app-sync.patch` and `my_changes.patch` target older file layouts and do not apply cleanly in either direction on this branch. They were reviewed and preserved unchanged.

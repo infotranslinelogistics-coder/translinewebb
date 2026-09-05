@@ -6,7 +6,7 @@ const nav = [
   ['Freight', '#services'],
   ['Coverage', '#coverage'],
   ['Fleet', '#fleet'],
-  ['Track', '#track'],
+  ['Driver tracking', '#track'],
   ['About', '#about'],
 ];
 
@@ -27,14 +27,14 @@ export function Header() {
       <nav className="siteHeader__nav" aria-label="Primary navigation">
         {nav.map(([label, href]) => <a key={href} href={href}>{label}</a>)}
       </nav>
-      <a className="siteHeader__portal" href="/portal">Customer portal <span aria-hidden="true">↗</span></a>
+      <a className="siteHeader__portal" href="/portal/login">Admin portal <span aria-hidden="true">↗</span></a>
       <button className="siteHeader__menu" type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-controls="mobile-navigation" aria-label="Toggle navigation">
         {open ? <X /> : <Menu />}
       </button>
       {open && (
         <nav id="mobile-navigation" className="siteHeader__mobile" aria-label="Mobile navigation">
           {nav.map(([label, href]) => <a key={href} href={href} onClick={() => setOpen(false)}>{label}</a>)}
-          <a href="/portal">Customer portal ↗</a>
+          <a href="/portal/login">Admin portal ↗</a>
         </nav>
       )}
     </header>

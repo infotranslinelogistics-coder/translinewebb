@@ -25,15 +25,8 @@ const process = [
 
 export function HomePage() {
   const [service, setService] = useState<ServiceType | 'all'>('all');
-  const [trackingId, setTrackingId] = useState('');
   const [quoteSent, setQuoteSent] = useState(false);
   const routeCount = useMemo(() => service === 'all' ? freightRoutes.length : freightRoutes.filter((route) => route.service === service).length, [service]);
-
-  const handleTrack = (event: FormEvent) => {
-    event.preventDefault();
-    const id = trackingId.trim();
-    if (id) window.location.assign(`/portal?tracking=${encodeURIComponent(id)}`);
-  };
 
   const handleQuote = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -128,13 +121,13 @@ export function HomePage() {
 
       <section id="track" className="trackSection sectionShell">
         <div>
-          <span className="eyebrow">Track a load</span>
-          <h2>Know where it is.</h2>
+          <span className="eyebrow">Admin portal</span>
+          <h2>Track every driver.</h2>
         </div>
-        <form onSubmit={handleTrack} className="trackingForm">
-          <label htmlFor="tracking-id">Tracking or consignment number</label>
-          <div><input id="tracking-id" value={trackingId} onChange={(event) => setTrackingId(event.target.value)} placeholder="TL-2409-0184" autoComplete="off" required /><button type="submit" aria-label="Track load"><ArrowRight /></button></div>
-        </form>
+        <div className="adminPortalCallout">
+          <p>Authorised Transline staff can view driver locations, assigned vehicles, active shifts and route history from one operations screen.</p>
+          <a className="button button--light" href="/portal/login">Open admin portal <ArrowRight /></a>
+        </div>
       </section>
 
       <section id="quote" className="quoteSection sectionShell">
