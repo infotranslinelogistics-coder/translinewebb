@@ -44,3 +44,11 @@ export async function forceEndBreak(driverId: string): Promise<AdminResponse> {
     driver_id: driverId,
   });
 }
+
+export async function listDriverEmails(userIds: string[]): Promise<Record<string, string | null>> {
+  if (userIds.length === 0) return {};
+  const result = await postJson<{ emails: Record<string, string | null> }>('/api/admin/list-driver-emails', {
+    user_ids: userIds,
+  });
+  return result.emails;
+}

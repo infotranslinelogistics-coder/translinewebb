@@ -10,9 +10,13 @@
     "dev": "node dev-server.js",
     "dev:old": "vite",
     "dev:all": "concurrently \"npm run dev\" \"npm --prefix portal run dev\"",
-    "build": "vite build && npm --prefix portal ci && npm --prefix portal run build && rm -rf dist/portal && mkdir -p dist/portal && cp -R portal/dist/. dist/portal/",
+    "build:marketing": "vite build && vite build --ssr src/entry-server.tsx --outDir .build/server && node scripts/prerender.mjs",
+    "build": "npm run build:marketing && npm --prefix portal ci && npm --prefix portal run build && rm -rf dist/portal && mkdir -p dist/portal && cp -R portal/dist/. dist/portal/",
+    "verify:site": "node scripts/verify-site.mjs",
+    "typecheck:marketing": "tsc --noEmit -p tsconfig.marketing.json",
     "preview": "vite preview",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test:enquiry": "node --test scripts/test-enquiry.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.1",

@@ -120,7 +120,7 @@ function getSeverityBadge(severity: string): string {
   if (normalized === 'high') return 'bg-red-950 text-red-400 border-red-900';
   if (normalized === 'medium') return 'bg-yellow-950 text-yellow-400 border-yellow-900';
   if (normalized === 'low') return 'bg-blue-950 text-blue-400 border-blue-900';
-  return 'bg-gray-800 text-gray-300 border-gray-700';
+  return 'bg-gray-800 text-gray-300 border-[#C4C0B7]';
 }
 
 function mapFromRecord(row: Record<string, unknown>): DriverLogRow {
@@ -291,25 +291,25 @@ export function LogsPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Total Logs</p>
             <p className="text-3xl font-bold text-white">{summary.total}</p>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Incidents</p>
             <p className="text-3xl font-bold text-orange-400">{summary.incidents}</p>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Maintenance</p>
             <p className="text-3xl font-bold text-yellow-400">{summary.maintenance}</p>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Accidents</p>
             <p className="text-3xl font-bold text-red-400">{summary.accidents}</p>
@@ -317,7 +317,7 @@ export function LogsPage() {
         </Card>
       </div>
 
-      <Card className="bg-[#161616] border-gray-800">
+      <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
         <CardHeader>
           <div className="flex flex-col gap-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -332,7 +332,7 @@ export function LogsPage() {
                   placeholder="Search logs..."
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  className="pl-10 bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
+                  className="pl-10 bg-[#F5F2EB] border-[#C4C0B7] text-white placeholder:text-gray-500"
                 />
               </div>
             </div>
@@ -344,8 +344,8 @@ export function LogsPage() {
                   onClick={() => setFilterType(type)}
                   className={
                     filterType === type
-                      ? 'bg-[#FF6B35] hover:bg-[#E55A2B] text-white'
-                      : 'border-gray-700 text-gray-400 hover:text-white'
+                      ? 'bg-[#BE1C2D] hover:bg-[#A81828] text-white'
+                      : 'border-[#C4C0B7] text-gray-400 hover:text-white'
                   }
                 >
                   {type === 'all'
@@ -366,13 +366,13 @@ export function LogsPage() {
         <CardContent>
           {loading ? (
             <div className="flex justify-center py-16">
-              <Loader className="w-8 h-8 text-[#FF6B35] animate-spin" />
+              <Loader className="w-8 h-8 text-[#BE1C2D] animate-spin" />
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">Type/category</TableHead>
                     <TableHead className="text-gray-400">Driver</TableHead>
                     <TableHead className="text-gray-400">Vehicle</TableHead>
@@ -398,7 +398,7 @@ export function LogsPage() {
                       const hasLocation = log.latitude != null && log.longitude != null;
 
                       return (
-                        <TableRow key={log.id} className="border-gray-800">
+                        <TableRow key={log.id} className="border-[#D7D3CA]">
                           <TableCell>
                             <Badge className={getTypeBadge(log.category)}>
                               <Icon className="w-3 h-3 mr-1" />
@@ -422,7 +422,7 @@ export function LogsPage() {
                                   href={`https://www.google.com/maps?q=${log.latitude},${log.longitude}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-[#FF6B35] hover:underline"
+                                  className="inline-flex items-center gap-1 text-[#BE1C2D] hover:underline"
                                 >
                                   <MapPin className="w-3 h-3" />
                                   Open in Maps
@@ -437,7 +437,7 @@ export function LogsPage() {
                             {log.photo_path && log.photo_url ? (
                               <Button
                                 size="sm"
-                                className="bg-[#FF6B35] text-white hover:bg-[#e55a25] text-xs"
+                                className="bg-[#BE1C2D] text-white hover:bg-[#e55a25] text-xs"
                                 onClick={() => setPreviewUrl(log.photo_url ?? null)}
                               >
                                 <ImageIcon className="w-3.5 h-3.5 mr-1" />
@@ -449,7 +449,7 @@ export function LogsPage() {
                           </TableCell>
                           <TableCell>
                             {log.shift_id ? (
-                              <Button asChild size="sm" className="bg-[#FF6B35] text-white hover:bg-[#e55a25] text-xs">
+                              <Button asChild size="sm" className="bg-[#BE1C2D] text-white hover:bg-[#e55a25] text-xs">
                                 <Link to={`/shifts/${log.shift_id}`}>Shift Details</Link>
                               </Button>
                             ) : (
@@ -479,7 +479,7 @@ export function LogsPage() {
       </Card>
 
       <Dialog open={Boolean(previewUrl)} onOpenChange={(open) => !open && setPreviewUrl(null)}>
-        <DialogContent className="bg-[#161616] border-gray-800 max-w-3xl [&>button]:text-[#FF6B35] [&>button:hover]:text-[#e55a25]">
+        <DialogContent className="bg-[#FFFEFA] border-[#D7D3CA] max-w-3xl [&>button]:text-[#BE1C2D] [&>button:hover]:text-[#e55a25]">
           <DialogHeader>
             <DialogTitle className="text-white">Driver Log Photo</DialogTitle>
           </DialogHeader>
@@ -487,14 +487,14 @@ export function LogsPage() {
             <img
               src={previewUrl}
               alt="Driver log"
-              className="w-full max-h-[75vh] object-contain rounded-lg border border-gray-800"
+              className="w-full max-h-[75vh] object-contain rounded-lg border border-[#D7D3CA]"
             />
           ) : null}
         </DialogContent>
       </Dialog>
 
       <AlertDialog open={Boolean(deleteLogId)} onOpenChange={(open) => !open && setDeleteLogId(null)}>
-        <AlertDialogContent className="bg-[#161616] border-gray-800">
+        <AlertDialogContent className="bg-[#FFFEFA] border-[#D7D3CA]">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">Delete Log</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">

@@ -257,14 +257,14 @@ export function OdometerLogsPage() {
         <p className="text-gray-400">One row per shift with start and end odometer readings, photos, and distance. All times shown in {PERTH_TIME_LABEL}.</p>
       </div>
 
-      <Card className="border-gray-800 bg-[#161616]">
+      <Card className="border-[#D7D3CA] bg-[#FFFEFA]">
         <CardContent className="p-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-sm text-gray-400">Current Odometer</p>
               <div className="mt-2 w-full md:w-64">
                 <Select value={currentOdometerVehicleId} onValueChange={setCurrentOdometerVehicleId}>
-                  <SelectTrigger className="border-gray-700 bg-[#0F0F0F] text-white">
+                  <SelectTrigger className="border-[#C4C0B7] bg-[#F5F2EB] text-white">
                     <SelectValue placeholder="Select vehicle" />
                   </SelectTrigger>
                   <SelectContent>
@@ -290,7 +290,7 @@ export function OdometerLogsPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-gray-800 bg-[#161616]">
+      <Card className="border-[#D7D3CA] bg-[#FFFEFA]">
         <CardHeader>
           <CardTitle className="text-white">Filters</CardTitle>
           <CardDescription className="text-gray-400">Filter by driver, vehicle, and shift date.</CardDescription>
@@ -299,7 +299,7 @@ export function OdometerLogsPage() {
           <div className="space-y-2">
             <Label className="text-gray-300">Driver</Label>
             <Select value={driverFilter} onValueChange={setDriverFilter}>
-              <SelectTrigger className="border-gray-700 bg-[#0F0F0F] text-white">
+              <SelectTrigger className="border-[#C4C0B7] bg-[#F5F2EB] text-white">
                 <SelectValue placeholder="All drivers" />
               </SelectTrigger>
               <SelectContent>
@@ -316,7 +316,7 @@ export function OdometerLogsPage() {
           <div className="space-y-2">
             <Label className="text-gray-300">Vehicle</Label>
             <Select value={vehicleFilter} onValueChange={setVehicleFilter}>
-              <SelectTrigger className="border-gray-700 bg-[#0F0F0F] text-white">
+              <SelectTrigger className="border-[#C4C0B7] bg-[#F5F2EB] text-white">
                 <SelectValue placeholder="All vehicles" />
               </SelectTrigger>
               <SelectContent>
@@ -336,7 +336,7 @@ export function OdometerLogsPage() {
               type="date"
               value={startDate}
               onChange={(event) => setStartDate(event.target.value)}
-              className="border-gray-700 bg-[#0F0F0F] text-white"
+              className="border-[#C4C0B7] bg-[#F5F2EB] text-white"
             />
           </div>
 
@@ -346,13 +346,13 @@ export function OdometerLogsPage() {
               type="date"
               value={endDate}
               onChange={(event) => setEndDate(event.target.value)}
-              className="border-gray-700 bg-[#0F0F0F] text-white"
+              className="border-[#C4C0B7] bg-[#F5F2EB] text-white"
             />
           </div>
         </CardContent>
       </Card>
 
-      <Card className="border-gray-800 bg-[#161616]">
+      <Card className="border-[#D7D3CA] bg-[#FFFEFA]">
         <CardHeader>
           <CardTitle className="text-white">Shift Odometers</CardTitle>
           <CardDescription className="text-gray-400">{totalCount} total shifts</CardDescription>
@@ -360,13 +360,13 @@ export function OdometerLogsPage() {
         <CardContent>
           {loading ? (
             <div className="flex justify-center py-10">
-              <Loader className="h-8 w-8 animate-spin text-[#FF6B35]" />
+              <Loader className="h-8 w-8 animate-spin text-[#BE1C2D]" />
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">Driver</TableHead>
                     <TableHead className="text-gray-400">Vehicle</TableHead>
                     <TableHead className="text-gray-400">Shift Time</TableHead>
@@ -427,7 +427,7 @@ export function OdometerLogsPage() {
                               <button
                                 type="button"
                                 onClick={() => setPreviewImage({ url, title })}
-                                className="h-12 w-16 overflow-hidden rounded border border-gray-700"
+                                className="h-12 w-16 overflow-hidden rounded border border-[#C4C0B7]"
                               >
                                 <img src={url} alt={title} className="h-full w-full object-cover" />
                               </button>
@@ -474,7 +474,7 @@ export function OdometerLogsPage() {
                       };
 
                       return (
-                        <TableRow key={row.shift_id} className="border-gray-800">
+                        <TableRow key={row.shift_id} className="border-[#D7D3CA]">
                           <TableCell className="text-gray-300">{row.driver_name ?? row.driver_id ?? 'Unknown driver'}</TableCell>
                           <TableCell className="text-gray-300">{formatVehicleLabel(vehicle, row.vehicle_rego)}</TableCell>
                           <TableCell className="text-gray-300">
@@ -550,7 +550,7 @@ export function OdometerLogsPage() {
       </Card>
 
       <Dialog open={Boolean(previewImage)} onOpenChange={() => setPreviewImage(null)}>
-        <DialogContent className="max-w-2xl border-gray-800 bg-[#161616]">
+        <DialogContent className="max-w-2xl border-[#D7D3CA] bg-[#FFFEFA]">
           <DialogHeader>
             <DialogTitle className="text-white">{previewImage?.title ?? 'Odometer Photo'}</DialogTitle>
           </DialogHeader>

@@ -6,6 +6,7 @@ import fs from 'fs';
 import http from 'http';
 import { createDriver } from './server/admin/createDriver.js';
 import { deleteDriver } from './server/admin/deleteDriver.js';
+import { enquiryHandler, enquiryJsonErrorHandler } from './server/enquiries/handler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,12 +36,14 @@ async function setupDevServer() {
   const httpServer = http.createServer(app);
 
   app.use(express.json());
+  app.use(enquiryJsonErrorHandler);
 
   // Admin API routes used by portal pages in dev.
   app.post('/api/admin/create-driver', createDriver);
   app.post('/admin/create-driver', createDriver);
   app.post('/api/admin/delete-driver', deleteDriver);
   app.post('/admin/delete-driver', deleteDriver);
+  app.all('/api/enquiry', enquiryHandler);
 
   let viteMain, vitePortal;
 

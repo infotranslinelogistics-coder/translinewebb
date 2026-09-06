@@ -29,7 +29,7 @@ export function TermsPage() {
             <ul className="space-y-2 text-gray-600 ml-6">
               <li>• Collection and delivery of goods</li>
               <li>• Transport of palletised, bulk, and general freight</li>
-              <li>• Courier and express delivery services</li>
+              <li>• Courier, express delivery and hotshot services</li>
               <li>• Residential and commercial removals</li>
             </ul>
             <p className="text-gray-600 mt-3">

@@ -578,7 +578,7 @@ const clearRoute = () => {
           <p className="text-gray-400">Real-time driver and vehicle tracking</p>
         </div>
         <Button
-          className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
+          className="bg-[#BE1C2D] hover:bg-[#A81828] text-white"
         >
           <RefreshCw className="w-4 h-4 mr-2" />
           Refresh
@@ -586,7 +586,7 @@ const clearRoute = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <Card className="bg-[#161616] border-gray-800 lg:col-span-3">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA] lg:col-span-3">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
@@ -600,7 +600,7 @@ const clearRoute = () => {
           <CardContent>
             {routeLoading && (
               <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-black/40 rounded-lg">
-                <div className="flex items-center gap-2 bg-[#161616] px-4 py-2 rounded-lg border border-gray-700">
+                <div className="flex items-center gap-2 bg-[#FFFEFA] px-4 py-2 rounded-lg border border-[#C4C0B7]">
                   <Loader className="w-4 h-4 text-[#3B82F6] animate-spin" />
                   <span className="text-sm text-gray-300">Loading route...</span>
                 </div>
@@ -665,7 +665,7 @@ const clearRoute = () => {
         </Card>
 
         <div className="space-y-6">
-          <Card className="bg-[#161616] border-gray-800">
+          <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
             <CardHeader>
               <CardTitle className="text-white">Filters</CardTitle>
               <CardDescription className="text-gray-400">
@@ -676,7 +676,7 @@ const clearRoute = () => {
               <div className="space-y-2">
                 <Label className="text-gray-300">Vehicle</Label>
                 <Select value={vehicleFilter} onValueChange={setVehicleFilter}>
-                  <SelectTrigger className="bg-[#0F0F0F] border-gray-700 text-white">
+                  <SelectTrigger className="bg-[#F5F2EB] border-[#C4C0B7] text-white">
                     <SelectValue placeholder="All vehicles" />
                   </SelectTrigger>
 
@@ -694,7 +694,7 @@ const clearRoute = () => {
             </CardContent>
           </Card>
 
-          <Card className="bg-[#161616] border-gray-800">
+          <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
             <CardHeader>
               <CardTitle className="text-white">Active Shifts</CardTitle>
               <CardDescription className="text-gray-400">
@@ -705,7 +705,7 @@ const clearRoute = () => {
               <div className="space-y-3">
                 {false ? (
                   <div className="flex justify-center py-4">
-                    <Loader className="w-6 h-6 text-[#FF6B35] animate-spin" />
+                    <Loader className="w-6 h-6 text-[#BE1C2D] animate-spin" />
                   </div>
                 ) :
                   activeShifts.length ? activeShifts.map((shift) => (
@@ -713,10 +713,10 @@ const clearRoute = () => {
                       type="button"
                       key={shift.id}
                       onClick={() => drawRouteForShift(shift)}
-                      className={`w-full text-left p-3 bg-[#0F0F0F] rounded-lg border transition-colors ${
+                      className={`w-full text-left p-3 bg-[#F5F2EB] rounded-lg border transition-colors ${
                         selectedShiftId === shift.id
                           ? 'border-[#3B82F6]'
-                          : 'border-gray-800 hover:border-[#FF6B35]'
+                          : 'border-[#D7D3CA] hover:border-[#BE1C2D]'
                       }`}
                     >
                       <div className="flex items-start justify-between mb-2">
@@ -741,7 +741,7 @@ const clearRoute = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <MapPin className="w-3 h-3 text-[#FF6B35] flex-shrink-0" />
+                        <MapPin className="w-3 h-3 text-[#BE1C2D] flex-shrink-0" />
                         <span>
                           {gpsDrivers.find(d=>d.driver_id === shift.driver_id)?.location?.latitude?.toFixed(4)}, {gpsDrivers.find(d=>d.driver_id === shift.driver_id)?.location?.longitude?.toFixed(4)}
                         </span>
@@ -751,7 +751,7 @@ const clearRoute = () => {
                     <p className="text-gray-400 text-sm">No active shifts available.</p>
                   )}
 
-                <div className="pt-3 border-t border-gray-800 space-y-2">
+                <div className="pt-3 border-t border-[#D7D3CA] space-y-2">
                   <Label className="text-gray-300">Previous Shifts</Label>
                   <Select
                     value={selectedHistoryShiftId}
@@ -770,7 +770,7 @@ const clearRoute = () => {
                       await drawRouteForShift(selectedShift);
                     }}
                   >
-                    <SelectTrigger className="bg-[#0F0F0F] border-gray-700 text-white">
+                    <SelectTrigger className="bg-[#F5F2EB] border-[#C4C0B7] text-white">
                       <SelectValue placeholder="Select previous shift" />
                     </SelectTrigger>
                     <SelectContent>
@@ -788,10 +788,10 @@ const clearRoute = () => {
                     <button
                       type="button"
                       onClick={() => drawRouteForShift(previousShifts.find(s => s.id === selectedHistoryShiftId)!)}
-                      className={`w-full text-left p-3 bg-[#0F0F0F] rounded-lg border transition-colors ${
+                      className={`w-full text-left p-3 bg-[#F5F2EB] rounded-lg border transition-colors ${
                         selectedShiftId === selectedHistoryShiftId
                           ? 'border-[#3B82F6]'
-                          : 'border-gray-800 hover:border-[#FF6B35]'
+                          : 'border-[#D7D3CA] hover:border-[#BE1C2D]'
                       }`}
                     >
                       <div className="flex items-start justify-between mb-2">
@@ -816,7 +816,7 @@ const clearRoute = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <MapPin className="w-3 h-3 text-[#FF6B35] flex-shrink-0" />
+                        <MapPin className="w-3 h-3 text-[#BE1C2D] flex-shrink-0" />
                         <span>
                           <p className='text-gray-400 text-xs'>
                             Latest Location:

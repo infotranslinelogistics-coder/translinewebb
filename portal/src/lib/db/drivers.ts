@@ -1,5 +1,6 @@
 // Drivers data access layer
 import { supabase } from '../supabase';
+import { listDriverEmails } from '../api/admin';
 
 export interface Driver {
   driver_id: string;
@@ -49,7 +50,7 @@ export async function listDrivers(): Promise<Driver[]> {
     .map(d => d.user_id)
     .filter(Boolean);
 
-  const [profilesResponse, vehicleAssignmentsResponse] = await Promise.all([
+  const [profilesResponse, vehicleAssignmentsResponse, emailsByUserId] = await Promise.all([
     supabase
       .from('profiles')
       .select('id, phone')
@@ -57,6 +58,10 @@ export async function listDrivers(): Promise<Driver[]> {
     supabase
       .from('vehicles_with_driver')
       .select('vehicle_id, rego, driver_id'),
+    listDriverEmails(userIds).catch((err) => {
+      console.error('[drivers] listDriverEmails failed', err);
+      return {} as Record<string, string | null>;
+    }),
   ]);
 
   const { data: profiles, error: profilesError } = profilesResponse;
@@ -90,6 +95,7 @@ export async function listDrivers(): Promise<Driver[]> {
       status: d.status,
       auth_user_id: d.user_id,
       phone: profile?.phone || null,
+      email: (d.user_id && emailsByUserId[d.user_id]) || null,
 
       current_vehicle_id: assignment?.vehicle_id || null,
       current_vehicle_rego: assignment?.rego || null,
@@ -136,12 +142,23 @@ export async function getDriver(id: string): Promise<Driver | null> {
   const activeAssignment = data.vehicle_assignments
     ?.find((a: Record<string, unknown>) => a.active === true);
 
+  let email: string | null = null;
+  if (data.user_id) {
+    try {
+      const emails = await listDriverEmails([data.user_id]);
+      email = emails[data.user_id] ?? null;
+    } catch (err) {
+      console.error('[drivers] listDriverEmails failed', err);
+    }
+  }
+
   return {
     driver_id: data.id,
     auth_user_id: data.user_id ?? null,
     full_name: data.full_name ?? null,
     status: data.status ?? null,
     phone: (data.profiles as { phone?: string } | null)?.phone ?? null,
+    email,
     current_vehicle_id: activeAssignment?.vehicle_id ?? null,
     current_vehicle_rego: (activeAssignment?.vehicles as { rego?: string } | null)?.rego ?? null,
   };

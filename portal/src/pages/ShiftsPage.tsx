@@ -606,19 +606,19 @@ export function ShiftsPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Active Shifts</p>
             <p className="text-3xl font-bold text-green-400">{loading ? '-' : activeCount}</p>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Today's Shifts</p>
             <p className="text-3xl font-bold text-white">{loading ? '-' : todayCount}</p>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Total Shifts</p>
             <p className="text-3xl font-bold text-blue-400">{loading ? '-' : shifts.length}</p>
@@ -626,7 +626,7 @@ export function ShiftsPage() {
         </Card>
       </div>
 
-      <Card className="bg-[#161616] border-gray-800">
+      <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
         <CardHeader>
           <div className="flex flex-col gap-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -643,7 +643,7 @@ export function ShiftsPage() {
                   placeholder="Search shifts..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
+                  className="pl-10 bg-[#F5F2EB] border-[#C4C0B7] text-white placeholder:text-gray-500"
                 />
               </div>
             </div>
@@ -655,8 +655,8 @@ export function ShiftsPage() {
                   onClick={() => setFilterStatus(status)}
                   className={
                     filterStatus === status
-                      ? 'bg-[#FF6B35] hover:bg-[#E55A2B] text-white'
-                      : 'border-gray-700 text-gray-400 hover:text-white'
+                      ? 'bg-[#BE1C2D] hover:bg-[#A81828] text-white'
+                      : 'border-[#C4C0B7] text-gray-400 hover:text-white'
                   }
                 >
                   {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -668,13 +668,13 @@ export function ShiftsPage() {
         <CardContent>
           {loading ? (
             <div className="flex justify-center py-8">
-              <Loader className="w-8 h-8 text-[#FF6B35] animate-spin" />
+              <Loader className="w-8 h-8 text-[#BE1C2D] animate-spin" />
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">Driver</TableHead>
                     <TableHead className="text-gray-400">Vehicle</TableHead>
                     <TableHead className="text-gray-400">Start Time</TableHead>
@@ -696,7 +696,7 @@ export function ShiftsPage() {
                       const checklistEntries = normalizeChecklist(shift.checklist);
 
                       return (
-                        <TableRow key={shift.id} className="border-gray-800 align-top">
+                        <TableRow key={shift.id} className="border-[#D7D3CA] align-top">
                           <TableCell className="font-medium text-white">
                             {getDriverDisplay(shift)}
                           </TableCell>
@@ -719,7 +719,7 @@ export function ShiftsPage() {
                               className={
                                 shift.status === 'active'
                                   ? 'bg-green-950 text-green-400 border-green-900 capitalize'
-                                  : 'bg-gray-800 text-gray-400 border-gray-700 capitalize'
+                                  : 'bg-gray-800 text-gray-400 border-[#C4C0B7] capitalize'
                               }
                             >
                               {shift.status}
@@ -733,7 +733,7 @@ export function ShiftsPage() {
                                 {checklistEntries.map((item) => (
                                   <div
                                     key={`${shift.id}-${item.key}`}
-                                    className="flex items-center justify-between gap-3 rounded bg-[#0F0F0F] px-2 py-1 text-xs"
+                                    className="flex items-center justify-between gap-3 rounded bg-[#F5F2EB] px-2 py-1 text-xs"
                                   >
                                     <span className="text-gray-400">{item.label}</span>
                                     <span
@@ -800,7 +800,7 @@ export function ShiftsPage() {
       </Card>
 
       <AlertDialog open={endShiftDialog} onOpenChange={handleEndShiftDialogChange}>
-        <AlertDialogContent className="bg-[#161616] border-gray-800">
+        <AlertDialogContent className="bg-[#FFFEFA] border-[#D7D3CA]">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">End Shift</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">
@@ -812,7 +812,7 @@ export function ShiftsPage() {
               value={endShiftReason}
               onChange={(e) => setEndShiftReason(e.target.value)}
               placeholder="Reason (optional)"
-              className="bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
+              className="bg-[#F5F2EB] border-[#C4C0B7] text-white placeholder:text-gray-500"
             />
           </div>
           <div className="flex gap-4">
@@ -830,7 +830,7 @@ export function ShiftsPage() {
       </AlertDialog>
 
       <AlertDialog open={Boolean(deleteShiftTarget)} onOpenChange={(open) => !open && setDeleteShiftTarget(null)}>
-        <AlertDialogContent className="bg-[#161616] border-gray-800">
+        <AlertDialogContent className="bg-[#FFFEFA] border-[#D7D3CA]">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">Delete Shift</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">
@@ -855,7 +855,7 @@ export function ShiftsPage() {
 <Dialog open={detailsOpen} onOpenChange={handleDetailsOpenChange}>
   <DialogContent
     style={{ maxWidth: "1200px" }}
-    className="bg-[#161616] border-gray-800 text-white max-h-[90vh] overflow-y-auto"
+    className="bg-[#FFFEFA] border-[#D7D3CA] text-[#17191B] max-h-[90vh] overflow-y-auto"
   >
     <DialogHeader>
       <DialogTitle className="text-lg font-semibold">Shift Details</DialogTitle>
@@ -873,7 +873,7 @@ export function ShiftsPage() {
         <div className="xl:col-span-2 space-y-4">
 
           {/* OVERVIEW */}
-          <Card className="bg-[#0F0F0F] border-gray-800">
+          <Card className="bg-[#F5F2EB] border-[#D7D3CA]">
             <CardHeader>
               <CardTitle className="text-white">Overview</CardTitle>
             </CardHeader>
@@ -887,20 +887,20 @@ export function ShiftsPage() {
               ].map(([label, value]) => (
                 <div
                   key={label}
-                  className="rounded-lg bg-[#121212] border border-gray-800 px-3 py-2"
+                  className="rounded-lg bg-[#121212] border border-[#D7D3CA] px-3 py-2"
                 >
                   <p className="text-xs text-gray-500">{label}</p>
                   <p className="text-sm text-gray-100 truncate">{value}</p>
                 </div>
               ))}
 
-              <div className="rounded-lg bg-[#121212] border border-gray-800 px-3 py-2">
+              <div className="rounded-lg bg-[#121212] border border-[#D7D3CA] px-3 py-2">
                 <p className="text-xs text-gray-500">Status</p>
                 <Badge
                   className={
                     detailShift.status === "active"
                       ? "bg-green-950 text-green-400 border-green-900 mt-1 capitalize"
-                      : "bg-gray-800 text-gray-400 border-gray-700 mt-1 capitalize"
+                      : "bg-gray-800 text-gray-400 border-[#C4C0B7] mt-1 capitalize"
                   }
                 >
                   {detailShift.status}
@@ -910,7 +910,7 @@ export function ShiftsPage() {
           </Card>
 
           {/* GPS */}
-          <Card className="bg-[#0F0F0F] border-gray-800">
+          <Card className="bg-[#F5F2EB] border-[#D7D3CA]">
             <CardHeader>
               <CardTitle className="text-white">Live GPS Tracking</CardTitle>
               <CardDescription className="text-gray-500">
@@ -921,7 +921,7 @@ export function ShiftsPage() {
             <CardContent>
               {detailsLoading ? (
                 <div className="flex justify-center py-6">
-                  <Loader className="w-5 h-5 text-[#FF6B35] animate-spin" />
+                  <Loader className="w-5 h-5 text-[#BE1C2D] animate-spin" />
                 </div>
               ) : latestLocationItems.length === 0 ? (
                 <p className="text-sm text-gray-500">No GPS data available</p>
@@ -930,7 +930,7 @@ export function ShiftsPage() {
                   {latestLocationItems.map((item) => (
                     <div
                       key={`loc-${item.id}`}
-                      className="rounded-lg bg-[#121212] border border-gray-800 px-3 py-2 text-xs"
+                      className="rounded-lg bg-[#121212] border border-[#D7D3CA] px-3 py-2 text-xs"
                     >
                       <div className="flex justify-between text-gray-400">
                         <span>{item.latitude}</span>
@@ -952,7 +952,7 @@ export function ShiftsPage() {
           {/* CHECKLIST + BREAKS */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-            <Card className="bg-[#0F0F0F] border-gray-800">
+            <Card className="bg-[#F5F2EB] border-[#D7D3CA]">
               <CardHeader>
                 <CardTitle className="text-white">Checklist</CardTitle>
               </CardHeader>
@@ -986,14 +986,14 @@ export function ShiftsPage() {
 
                 <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
                   {checklistItems.length === 0 ? (
-                    <div className="rounded-lg border border-gray-800 bg-[#121212] px-3 py-2 text-xs text-gray-500">
+                    <div className="rounded-lg border border-[#D7D3CA] bg-[#121212] px-3 py-2 text-xs text-gray-500">
                       No checklist submission event found
                     </div>
                   ) : (
                     checklistItems.map((item) => (
                       <div
                         key={`detail-${detailShift.id}-${item.key}`}
-                        className="rounded-lg border border-gray-800 bg-[#121212] px-3 py-2 text-xs"
+                        className="rounded-lg border border-[#D7D3CA] bg-[#121212] px-3 py-2 text-xs"
                       >
                         <div className="flex justify-between gap-3">
                           <span className="text-gray-300">{item.label}</span>
@@ -1022,7 +1022,7 @@ export function ShiftsPage() {
               </CardContent>
             </Card>
 
-            <Card className="bg-[#0F0F0F] border-gray-800">
+            <Card className="bg-[#F5F2EB] border-[#D7D3CA]">
               <CardHeader>
                 <CardTitle className="text-white">Breaks</CardTitle>
               </CardHeader>
@@ -1065,7 +1065,7 @@ export function ShiftsPage() {
 
         {/* RIGHT COLUMN - TIMELINE */}
         <div className="xl:col-span-1">
-          <Card className="bg-[#0F0F0F] border-gray-800 h-full">
+          <Card className="bg-[#F5F2EB] border-[#D7D3CA] h-full">
             <CardHeader>
               <CardTitle className="text-white">Timeline</CardTitle>
               <CardDescription className="text-gray-500">
@@ -1076,7 +1076,7 @@ export function ShiftsPage() {
             <CardContent>
               {detailsLoading ? (
                 <div className="flex justify-center py-6">
-                  <Loader className="w-5 h-5 text-[#FF6B35] animate-spin" />
+                  <Loader className="w-5 h-5 text-[#BE1C2D] animate-spin" />
                 </div>
               ) : timelineItems.length === 0 ? (
                 <p className="text-sm text-gray-500">No events found</p>
@@ -1085,7 +1085,7 @@ export function ShiftsPage() {
                   {timelineItems.map((item) => (
                     <div
                       key={item.id}
-                      className="rounded-lg border border-gray-800 bg-[#121212] px-3 py-2"
+                      className="rounded-lg border border-[#D7D3CA] bg-[#121212] px-3 py-2"
                     >
                       <div className="flex justify-between">
                         <p className="text-sm text-gray-200">{item.label}</p>

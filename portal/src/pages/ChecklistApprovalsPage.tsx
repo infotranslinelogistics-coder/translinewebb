@@ -101,7 +101,7 @@ function ChecklistViewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl border-gray-800 bg-[#161616] text-gray-100">
+      <DialogContent className="max-w-3xl border-[#D7D3CA] bg-[#FFFEFA] text-gray-100">
         <DialogHeader>
           <DialogTitle className="text-white">Checklist Request Details</DialogTitle>
           <DialogDescription className="text-gray-400">
@@ -120,18 +120,18 @@ function ChecklistViewDialog({
               <p className="text-gray-300">Vehicle: <span className="text-white">{request.vehicle_rego ?? request.vehicle_id ?? 'Unknown'}</span></p>
             </div>
 
-            <div className="rounded-lg border border-gray-800 bg-[#0F0F0F] p-3">
+            <div className="rounded-lg border border-[#D7D3CA] bg-[#F5F2EB] p-3">
               <p className="mb-2 text-sm font-semibold text-white">Failed Items ({request.failed_items_count})</p>
               {request.failed_items.length === 0 ? (
                 <p className="text-sm text-gray-500">No structured failed item list was saved.</p>
               ) : (
                 <div className="space-y-2">
                   {request.failed_items.map((item) => (
-                    <div key={`${request.request_id}-${item.key}`} className="rounded border border-gray-700 p-2 text-sm">
+                    <div key={`${request.request_id}-${item.key}`} className="rounded border border-[#C4C0B7] p-2 text-sm">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-white font-medium">{item.label}</p>
                         {item.sectionTitle && (
-                          <span className="inline-flex items-center rounded border border-gray-700 bg-[#111111] px-2 py-0.5 text-[11px] text-gray-300">
+                          <span className="inline-flex items-center rounded border border-[#C4C0B7] bg-[#111111] px-2 py-0.5 text-[11px] text-gray-300">
                             {item.sectionTitle}
                           </span>
                         )}
@@ -148,14 +148,14 @@ function ChecklistViewDialog({
               )}
             </div>
 
-            <div className="rounded-lg border border-gray-800 bg-[#0F0F0F] p-3">
+            <div className="rounded-lg border border-[#D7D3CA] bg-[#F5F2EB] p-3">
               <p className="mb-2 text-sm font-semibold text-white">Full Checklist ({checklistEntries.length})</p>
               {checklistEntries.length === 0 ? (
                 <p className="text-sm text-gray-500">No checklist snapshot was saved for this request.</p>
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                   {checklistEntries.map((item) => (
-                    <div key={`${request.request_id}-${item.key}-full`} className="rounded border border-gray-700 p-2 text-sm">
+                    <div key={`${request.request_id}-${item.key}-full`} className="rounded border border-[#C4C0B7] p-2 text-sm">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-gray-200 font-medium">{item.label}</p>
                         <span
@@ -177,7 +177,7 @@ function ChecklistViewDialog({
               )}
             </div>
 
-            <div className="rounded-lg border border-gray-800 bg-[#0F0F0F] p-3">
+            <div className="rounded-lg border border-[#D7D3CA] bg-[#F5F2EB] p-3">
               <p className="mb-2 text-sm font-semibold text-white">Admin Note</p>
               <p className="text-sm text-gray-300">{request.admin_note ?? 'No admin note yet.'}</p>
             </div>
@@ -313,7 +313,7 @@ export function ChecklistApprovalsPage() {
         <Button
           variant="outline"
           onClick={load}
-          className="border-gray-700 bg-[#0F0F0F] text-gray-200 hover:bg-[#1C1C1C] hover:text-white"
+          className="border-[#C4C0B7] bg-[#F5F2EB] text-gray-200 hover:bg-[#1C1C1C] hover:text-white"
           disabled={loading}
         >
           {loading ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -322,19 +322,19 @@ export function ChecklistApprovalsPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Pending</p>
             <p className="text-3xl font-bold text-red-400">{loading ? '-' : pendingCount}</p>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Approved</p>
             <p className="text-3xl font-bold text-green-400">{loading ? '-' : approvedCount}</p>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6">
             <p className="text-sm text-gray-400 mb-1">Rejected</p>
             <p className="text-3xl font-bold text-yellow-300">{loading ? '-' : rejectedCount}</p>
@@ -342,7 +342,7 @@ export function ChecklistApprovalsPage() {
         </Card>
       </div>
 
-      <Card className="bg-[#161616] border-gray-800">
+      <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -355,7 +355,7 @@ export function ChecklistApprovalsPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search by driver, vehicle, status..."
-                className="pl-10 bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
+                className="pl-10 bg-[#F5F2EB] border-[#C4C0B7] text-white placeholder:text-gray-500"
               />
             </div>
           </div>
@@ -363,13 +363,13 @@ export function ChecklistApprovalsPage() {
         <CardContent>
           {loading ? (
             <div className="flex justify-center py-8">
-              <Loader className="h-8 w-8 animate-spin text-[#FF6B35]" />
+              <Loader className="h-8 w-8 animate-spin text-[#BE1C2D]" />
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">Requested time</TableHead>
                     <TableHead className="text-gray-400">Driver</TableHead>
                     <TableHead className="text-gray-400">Vehicle</TableHead>
@@ -393,7 +393,7 @@ export function ChecklistApprovalsPage() {
                       const busy = busyId === request.request_id;
 
                       return (
-                        <TableRow key={request.request_id} className="border-gray-800 align-top">
+                        <TableRow key={request.request_id} className="border-[#D7D3CA] align-top">
                           <TableCell className="text-gray-300">{formatPerthDateTime(request.requested_at)}</TableCell>
                           <TableCell className="text-gray-200">{request.driver_name ?? request.driver_id ?? 'Unknown'}</TableCell>
                           <TableCell className="text-gray-200">{request.vehicle_rego ?? request.vehicle_id ?? 'Unknown'}</TableCell>
@@ -417,7 +417,7 @@ export function ChecklistApprovalsPage() {
                                     setApproveNoteById((prev) => ({ ...prev, [request.request_id]: event.target.value }))
                                   }
                                   placeholder="Optional approval note"
-                                  className="min-h-16 bg-[#0F0F0F] border-gray-700 text-white"
+                                  className="min-h-16 bg-[#F5F2EB] border-[#C4C0B7] text-white"
                                 />
                                 <Textarea
                                   value={rejectNoteById[request.request_id] ?? ''}
@@ -425,7 +425,7 @@ export function ChecklistApprovalsPage() {
                                     setRejectNoteById((prev) => ({ ...prev, [request.request_id]: event.target.value }))
                                   }
                                   placeholder="Required reject note"
-                                  className="min-h-16 bg-[#0F0F0F] border-gray-700 text-white"
+                                  className="min-h-16 bg-[#F5F2EB] border-[#C4C0B7] text-white"
                                 />
                                 <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
                                   <input
@@ -434,7 +434,7 @@ export function ChecklistApprovalsPage() {
                                     onChange={(event) =>
                                       setNoteVisibleById((prev) => ({ ...prev, [request.request_id]: event.target.checked }))
                                     }
-                                    className="h-4 w-4 accent-[#FF6B35]"
+                                    className="h-4 w-4 accent-[#BE1C2D]"
                                   />
                                   Show this note to the driver
                                 </label>
@@ -446,7 +446,7 @@ export function ChecklistApprovalsPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="border-gray-700 bg-[#0F0F0F] text-gray-200 hover:bg-[#1C1C1C] hover:text-white"
+                                className="border-[#C4C0B7] bg-[#F5F2EB] text-gray-200 hover:bg-[#1C1C1C] hover:text-white"
                                 onClick={() => setViewing(request)}
                               >
                                 <ShieldAlert className="mr-1 h-4 w-4" />

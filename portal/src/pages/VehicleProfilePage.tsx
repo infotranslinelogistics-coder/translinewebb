@@ -57,18 +57,18 @@ function statusBadge(s: string | null | undefined) {
   if (s === 'active') return 'bg-blue-950 text-blue-300 border-blue-800';
   if (s === 'completed') return 'bg-green-950 text-green-400 border-green-900';
   if (s === 'cancelled') return 'bg-red-950 text-red-400 border-red-900';
-  return 'bg-gray-800 text-gray-400 border-gray-700';
+  return 'bg-gray-800 text-gray-400 border-[#C4C0B7]';
 }
 function vehicleStatusBadge(s: string | null | undefined) {
   if (s === 'active') return 'bg-green-950 text-green-400 border-green-900';
   if (s === 'maintenance') return 'bg-yellow-950 text-yellow-400 border-yellow-900';
-  return 'bg-gray-800 text-gray-400 border-gray-700';
+  return 'bg-gray-800 text-gray-400 border-[#C4C0B7]';
 }
 function maintStatusBadge(s: string) {
   if (s === 'completed') return 'bg-green-950 text-green-400 border-green-900';
   if (s === 'pending') return 'bg-yellow-950 text-yellow-400 border-yellow-900';
   if (s === 'cancelled') return 'bg-red-950 text-red-400 border-red-900';
-  return 'bg-gray-800 text-gray-400 border-gray-700';
+  return 'bg-gray-800 text-gray-400 border-[#C4C0B7]';
 }
 
 export function VehicleProfilePage() {
@@ -158,8 +158,8 @@ export function VehicleProfilePage() {
         const [vRes, assignRes, latestOdoRes, firstOdoRes, weeklyRes, activeRes] = await Promise.all([
           supabase.from('vehicles').select('id, rego, make, model, status, created_at').eq('id', id).maybeSingle(),
           supabase.from('vehicles_with_driver').select('driver_id, driver_name').eq('vehicle_id', id).maybeSingle(),
-          supabase.from('odometer_readings').select('id, reading, captured_at, driver_id, photo_path, lat, lng').eq('vehicle_id', id).order('captured_at', { ascending: false }).limit(1),
-          supabase.from('odometer_readings').select('id, reading, captured_at, driver_id').eq('vehicle_id', id).order('captured_at', { ascending: true }).limit(1),
+          supabase.from('odometer_readings_feed').select('id, reading, captured_at, driver_id, photo_path, lat, lng').eq('vehicle_id', id).order('captured_at', { ascending: false }).limit(1),
+          supabase.from('odometer_readings_feed').select('id, reading, captured_at, driver_id').eq('vehicle_id', id).order('captured_at', { ascending: true }).limit(1),
           supabase.from('shifts_full').select('id, driver_id, driver_name, started_at, ended_at, status').eq('vehicle_id', id).lte('started_at', wkEnd).or(`ended_at.gte.${wkStart},ended_at.is.null`),
           supabase.from('shifts_full').select('id, driver_id, driver_name, started_at, ended_at, status').eq('vehicle_id', id).or('status.eq.active,ended_at.is.null').order('started_at', { ascending: false }).limit(1),
         ]);
@@ -227,7 +227,7 @@ export function VehicleProfilePage() {
     if (!id) return;
     const run = async () => {
       const from = (odoPage - 1) * PAGE_SIZE;
-      const { data, error: e, count } = await supabase.from('odometer_readings').select('id, reading, captured_at, driver_id, photo_path, lat, lng', { count: 'exact' }).eq('vehicle_id', id).order('captured_at', { ascending: false }).range(from, from + PAGE_SIZE - 1);
+      const { data, error: e, count } = await supabase.from('odometer_readings_feed').select('id, reading, captured_at, driver_id, photo_path, lat, lng', { count: 'exact' }).eq('vehicle_id', id).order('captured_at', { ascending: false }).range(from, from + PAGE_SIZE - 1);
       if (e) { console.error(e); return; }
       setOdoLogs((data as OdometerRow[]) ?? []); setOdoCount(count ?? 0);
     };
@@ -263,7 +263,7 @@ export function VehicleProfilePage() {
       map.setView([lat, lng], 15);
       const heading = driverStatus?.heading ?? 0;
       const icon = L.divIcon({
-        html: `<div style="width:36px;height:36px;background:#FF6B35;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 0 12px rgba(255,107,53,0.6);transform:rotate(${heading}deg)"><svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M12 2L4 20l8-4 8 4L12 2z"/></svg></div>`,
+        html: `<div style="width:36px;height:36px;background:#BE1C2D;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 0 12px rgba(190,28,45,0.45);transform:rotate(${heading}deg)"><svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M12 2L4 20l8-4 8 4L12 2z"/></svg></div>`,
         className: '', iconSize: [36, 36], iconAnchor: [18, 18],
       });
       const marker = L.marker([lat, lng], { icon }).addTo(map);
@@ -294,7 +294,7 @@ export function VehicleProfilePage() {
     return () => { ch.unsubscribe(); };
   }, [driverId, id]);
 
-  if (loading) return <div className="flex justify-center py-16"><Loader className="w-8 h-8 text-[#FF6B35] animate-spin" /></div>;
+  if (loading) return <div className="flex justify-center py-16"><Loader className="w-8 h-8 text-[#BE1C2D] animate-spin" /></div>;
   if (error || !vehicle) return <Card className="bg-red-950 border-red-900"><CardContent className="p-4 text-red-400">{error ?? 'Vehicle not found'}</CardContent></Card>;
 
   const gpsActive = latestLocation?.created_at
@@ -319,13 +319,13 @@ export function VehicleProfilePage() {
           <div className="flex flex-wrap items-center gap-3 mt-1">
             <Badge className={`capitalize ${vehicleStatusBadge(vehicle.status)}`}>{vehicle.status ?? 'unknown'}</Badge>
             {driverName
-              ? <span className="text-sm text-gray-400">Assigned to <button className="text-[#FF6B35] hover:underline" onClick={() => driverId && navigate(`/drivers/${driverId}`)}>{driverName}</button></span>
+              ? <span className="text-sm text-gray-400">Assigned to <button className="text-[#BE1C2D] hover:underline" onClick={() => driverId && navigate(`/drivers/${driverId}`)}>{driverName}</button></span>
               : <span className="text-sm text-gray-500">Unassigned</span>}
             {activeShift && <Badge className="bg-blue-950 text-blue-300 border-blue-800">Active Shift</Badge>}
             {gpsActive && <Badge className="bg-purple-950 text-purple-300 border-purple-800 flex items-center gap-1"><Navigation className="w-3 h-3" />GPS Active</Badge>}
           </div>
         </div>
-        <Button variant="default" className="bg-[#FF6B35] text-white hover:bg-[#e55a25] shrink-0" onClick={() => navigate('/vehicles')}>
+        <Button variant="default" className="bg-[#BE1C2D] text-white hover:bg-[#e55a25] shrink-0" onClick={() => navigate('/vehicles')}>
           <ArrowLeft className="w-4 h-4 mr-2" />Back to Vehicles
         </Button>
       </div>
@@ -333,12 +333,12 @@ export function VehicleProfilePage() {
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Current Odometer', value: latestOdo?.reading != null ? `${latestOdo.reading.toLocaleString()} km` : '—', icon: Gauge,      color: 'text-[#FF6B35]'  },
+          { label: 'Current Odometer', value: latestOdo?.reading != null ? `${latestOdo.reading.toLocaleString()} km` : '—', icon: Gauge,      color: 'text-[#BE1C2D]'  },
           { label: 'Total KM Logged',  value: totalKm != null ? `${totalKm.toLocaleString()} km` : '—',                     icon: TrendingUp, color: 'text-green-400'  },
           { label: 'Hours This Week',  value: `${hoursThisWeek.toFixed(1)}h`,                                                icon: Clock,      color: 'text-blue-400'   },
           { label: 'Shifts This Week', value: String(shiftsThisWeek),                                                        icon: Activity,   color: 'text-purple-400' },
         ].map(({ label, value, icon: Icon, color }) => (
-          <Card key={label} className="bg-[#161616] border-gray-800">
+          <Card key={label} className="bg-[#FFFEFA] border-[#D7D3CA]">
             <CardContent className="p-4 flex items-center gap-3">
               <Icon className={`w-8 h-8 ${color} shrink-0`} />
               <div><p className="text-xs text-gray-500">{label}</p><p className="text-xl font-semibold text-white">{value}</p></div>
@@ -348,7 +348,7 @@ export function VehicleProfilePage() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="bg-[#161616] border border-gray-800">
+        <TabsList className="bg-[#FFFEFA] border border-[#D7D3CA]">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="shifts">Shifts</TabsTrigger>
           <TabsTrigger value="odometer">Odometer</TabsTrigger>
@@ -360,9 +360,9 @@ export function VehicleProfilePage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             {/* Vehicle details */}
-            <Card className="bg-[#161616] border-gray-800">
+            <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
               <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2"><Truck className="w-4 h-4 text-[#FF6B35]" />Vehicle Details</CardTitle>
+                <CardTitle className="text-white flex items-center gap-2"><Truck className="w-4 h-4 text-[#BE1C2D]" />Vehicle Details</CardTitle>
                 <CardDescription className="text-gray-400">ID: {vehicle.id}</CardDescription>
               </CardHeader>
               <CardContent className="text-sm">
@@ -386,7 +386,7 @@ export function VehicleProfilePage() {
                   ))}
                 </div>
                 {activeShift && (
-                  <Button variant="default" size="sm" className="mt-4 bg-[#FF6B35] text-white hover:bg-[#e55a25]" onClick={() => navigate(`/shifts/${activeShift.id}`)}>
+                  <Button variant="default" size="sm" className="mt-4 bg-[#BE1C2D] text-white hover:bg-[#e55a25]" onClick={() => navigate(`/shifts/${activeShift.id}`)}>
                     View Active Shift Details
                   </Button>
                 )}
@@ -394,10 +394,10 @@ export function VehicleProfilePage() {
             </Card>
 
             {/* Live GPS */}
-            <Card className="bg-[#161616] border-gray-800">
+            <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
-                  <Navigation className="w-4 h-4 text-[#FF6B35]" />Live GPS
+                  <Navigation className="w-4 h-4 text-[#BE1C2D]" />Live GPS
                   {gpsActive && <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block ml-1" />}
                 </CardTitle>
                 <CardDescription className="text-gray-400">
@@ -411,11 +411,11 @@ export function VehicleProfilePage() {
                   <>
                     <div ref={gpsMapRef} className="w-full rounded-b-lg" style={{ height: 280 }} />
                     <div className="px-4 py-2 flex gap-2">
-                      <Button asChild size="sm" className="bg-[#FF6B35] text-white hover:bg-[#e55a25] text-xs">
+                      <Button asChild size="sm" className="bg-[#BE1C2D] text-white hover:bg-[#e55a25] text-xs">
                         <a href={`https://www.google.com/maps?q=${latestLocation.latitude},${latestLocation.longitude}`} target="_blank" rel="noopener noreferrer">Open in Google Maps</a>
                       </Button>
                       {driverId && (
-                        <Button size="sm" className="bg-[#FF6B35] text-white hover:bg-[#e55a25] text-xs" onClick={() => navigate(`/drivers/${driverId}`)}>
+                        <Button size="sm" className="bg-[#BE1C2D] text-white hover:bg-[#e55a25] text-xs" onClick={() => navigate(`/drivers/${driverId}`)}>
                           Driver Profile
                         </Button>
                       )}
@@ -434,7 +434,7 @@ export function VehicleProfilePage() {
 
         {/* ── Shifts ── */}
         <TabsContent value="shifts">
-          <Card className="bg-[#161616] border-gray-800">
+          <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
             <CardHeader>
               <CardTitle className="text-white">Shift History</CardTitle>
               <CardDescription className="text-gray-400">{shiftCount} total shifts</CardDescription>
@@ -442,7 +442,7 @@ export function VehicleProfilePage() {
             <CardContent>
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">Driver</TableHead>
                     <TableHead className="text-gray-400">Start</TableHead>
                     <TableHead className="text-gray-400">End</TableHead>
@@ -458,7 +458,7 @@ export function VehicleProfilePage() {
                     const mins = differenceInMinutes(s.ended_at ? new Date(s.ended_at) : new Date(), new Date(s.started_at!));
                     const dur = mins >= 60 ? `${(mins / 60).toFixed(1)}h` : `${mins}m`;
                     return (
-                      <TableRow key={s.id} className="border-gray-800">
+                      <TableRow key={s.id} className="border-[#D7D3CA]">
                         <TableCell className="text-gray-300">{s.driver_name ?? '—'}</TableCell>
                         <TableCell className="text-gray-300">{fmtDate(s.started_at)}</TableCell>
                         <TableCell className="text-gray-300">{s.ended_at ? fmtDate(s.ended_at) : <Badge className="bg-blue-950 text-blue-300 border-blue-800">Active</Badge>}</TableCell>
@@ -483,9 +483,9 @@ export function VehicleProfilePage() {
 
         {/* ── Odometer ── */}
         <TabsContent value="odometer">
-          <Card className="bg-[#161616] border-gray-800">
+          <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2"><Gauge className="w-4 h-4 text-[#FF6B35]" />Odometer Log</CardTitle>
+              <CardTitle className="text-white flex items-center gap-2"><Gauge className="w-4 h-4 text-[#BE1C2D]" />Odometer Log</CardTitle>
               <CardDescription className="text-gray-400">
                 {latestOdo?.reading != null && firstOdo?.reading != null
                   ? `Current: ${latestOdo.reading.toLocaleString()} km · First recorded: ${firstOdo.reading.toLocaleString()} km · ${totalKm != null ? `${totalKm.toLocaleString()} km logged` : ''}`
@@ -495,7 +495,7 @@ export function VehicleProfilePage() {
             <CardContent>
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">Captured</TableHead>
                     <TableHead className="text-gray-400">Reading</TableHead>
                     <TableHead className="text-gray-400">Change</TableHead>
@@ -510,11 +510,11 @@ export function VehicleProfilePage() {
                     const next = odoLogs[idx + 1];
                     const change = next?.reading != null && log.reading != null ? log.reading - next.reading : null;
                     return (
-                      <TableRow key={log.id} className="border-gray-800">
+                      <TableRow key={log.id} className="border-[#D7D3CA]">
                         <TableCell className="text-gray-300">{fmtDate(log.captured_at)}</TableCell>
                         <TableCell className="text-gray-200 font-medium">{log.reading != null ? `${log.reading.toLocaleString()} km` : '—'}</TableCell>
                         <TableCell className="text-gray-400 text-xs">{change != null ? `+${change.toLocaleString()} km` : '—'}</TableCell>
-                        <TableCell className="text-gray-300">{log.driver_id ? <button className="text-[#FF6B35] hover:underline text-xs" onClick={() => navigate(`/drivers/${log.driver_id}`)}>{log.driver_id.slice(0, 8)}…</button> : '—'}</TableCell>
+                        <TableCell className="text-gray-300">{log.driver_id ? <button className="text-[#BE1C2D] hover:underline text-xs" onClick={() => navigate(`/drivers/${log.driver_id}`)}>{log.driver_id.slice(0, 8)}…</button> : '—'}</TableCell>
                         <TableCell className="text-gray-300 text-xs">{log.lat != null && log.lng != null ? `${log.lat.toFixed(4)}, ${log.lng.toFixed(4)}` : '—'}</TableCell>
                       </TableRow>
                     );
@@ -534,15 +534,15 @@ export function VehicleProfilePage() {
 
         {/* ── Maintenance ── */}
         <TabsContent value="maintenance">
-          <Card className="bg-[#161616] border-gray-800">
+          <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2"><Wrench className="w-4 h-4 text-[#FF6B35]" />Maintenance Log</CardTitle>
+              <CardTitle className="text-white flex items-center gap-2"><Wrench className="w-4 h-4 text-[#BE1C2D]" />Maintenance Log</CardTitle>
               <CardDescription className="text-gray-400">{maintCount} records</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">Date</TableHead>
                     <TableHead className="text-gray-400">Service</TableHead>
                     <TableHead className="text-gray-400">Odometer</TableHead>
@@ -555,7 +555,7 @@ export function VehicleProfilePage() {
                   {maintLogs.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-6 text-gray-500">No maintenance records found.</TableCell></TableRow>
                   ) : maintLogs.map((m) => (
-                    <TableRow key={m.id} className="border-gray-800">
+                    <TableRow key={m.id} className="border-[#D7D3CA]">
                       <TableCell className="text-gray-300">{fmtDate(m.service_date)}</TableCell>
                       <TableCell className="text-gray-200">{m.service_type}</TableCell>
                       <TableCell className="text-gray-300">{m.odometer != null ? `${m.odometer.toLocaleString()} km` : '—'}</TableCell>

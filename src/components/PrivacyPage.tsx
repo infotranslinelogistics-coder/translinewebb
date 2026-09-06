@@ -6,7 +6,7 @@ export function PrivacyPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-white mb-4">Privacy Policy</h1>
           <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-            Last updated: January 2026
+            Last updated: September 2026
           </p>
         </div>
       </section>
@@ -64,6 +64,9 @@ export function PrivacyPage() {
             </ul>
             <p className="text-gray-600 mt-3">
               We do not sell, trade, or rent your personal information to third parties for marketing purposes.
+            </p>
+            <p className="text-gray-600 mt-3">
+              Website booking enquiry details are sent to Transline dispatch through an email delivery provider so the team can respond to your request.
             </p>
           </div>
 

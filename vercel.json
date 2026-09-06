@@ -6,9 +6,10 @@
   ],
   "headers": [
     {
-      "source": "/portal/index.html",
+      "source": "/portal/:path*",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" }
+        { "key": "Cache-Control", "value": "no-store" },
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
       ]
     }
   ]

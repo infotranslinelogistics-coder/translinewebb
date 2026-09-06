@@ -5,6 +5,11 @@
 [dev]
   command = "npm run dev"
 
+[[headers]]
+  for = "/portal/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
 # Portal SPA routing
 # Note: force = false allows static files to be served first
 [[redirects]]
@@ -13,9 +18,9 @@
   status = 200
   force = false
 
-# Main site SPA routing
+# Unknown marketing paths return the actual 404 page. Generated pages resolve as files.
 [[redirects]]
   from = "/*"
-  to = "/index.html"
-  status = 200
+  to = "/404.html"
+  status = 404
   force = false

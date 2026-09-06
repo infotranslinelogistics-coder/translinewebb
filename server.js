@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { createDriver } from './server/admin/createDriver.js';
 import { deleteDriver } from './server/admin/deleteDriver.js';
+import { enquiryHandler, enquiryJsonErrorHandler } from './server/enquiries/handler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,12 +32,15 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(express.json());
+app.use(enquiryJsonErrorHandler);
+app.use('/portal', (_req, res, next) => { res.setHeader('X-Robots-Tag', 'noindex, nofollow'); next(); });
 
 // Admin API routes
 app.post('/admin/create-driver', createDriver);
 app.post('/api/admin/create-driver', createDriver);
 app.post('/admin/delete-driver', deleteDriver);
 app.post('/api/admin/delete-driver', deleteDriver);
+app.all('/api/enquiry', enquiryHandler);
 
 // IMPORTANT: Portal MUST come BEFORE main site static files and catch-alls
 
@@ -56,11 +60,11 @@ app.get('/portal/*', (req, res) => {
 // Serve main site static files
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// Main SPA: catch-all for all other routes
+// Marketing routes are pre-rendered. Unknown paths must not become soft 404s.
 app.get('*', (req, res) => {
-  const mainIndexPath = path.join(__dirname, 'dist', 'index.html');
+  const mainIndexPath = path.join(__dirname, 'dist', '404.html');
   if (fs.existsSync(mainIndexPath)) {
-    res.sendFile(mainIndexPath);
+    res.status(404).sendFile(mainIndexPath);
   } else {
     res.status(404).send('Main index.html not found');
   }

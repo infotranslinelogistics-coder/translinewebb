@@ -1,5 +1,5 @@
 // Main dashboard layout with sidebar and header
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/app/components/ui/button';
@@ -9,6 +9,9 @@ import { Card, CardContent } from '@/app/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { formatPerthDateTime } from '@/lib/dateTime';
 import { InboxProvider, useInbox } from '@/contexts/InboxContext';
+import { supabase } from '@/lib/supabase';
+import { listDrivers } from '@/lib/db/drivers';
+import logo from '@/assets/transline-logo-lockup.png';
 import {
   LayoutDashboard,
   Users,
@@ -119,7 +122,7 @@ function InboxDialogButton() {
                       <div className="flex flex-wrap gap-2">
                         <Button
                           size="sm"
-                          className="bg-[#FF6B35] text-white hover:bg-[#E55A2B]"
+                          className="bg-[#BE1C2D] text-white hover:bg-[#A81828]"
                           onClick={() => { setOpen(false); navigate('/checklist-approvals'); }}
                         >
                           <ExternalLink className="w-4 h-4 mr-1" />
@@ -151,7 +154,7 @@ function InboxDialogButton() {
                         <div className="flex flex-wrap gap-2">
                           <Button
                             size="sm"
-                            className="bg-[#FF6B35] text-white hover:bg-[#E55A2B]"
+                            className="bg-[#BE1C2D] text-white hover:bg-[#A81828]"
                             disabled={busy}
                             onClick={() => acknowledge(notification.maintenance_item_id)}
                           >
@@ -195,7 +198,37 @@ export function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [onlineDrivers] = useState(12); // Mock data - replace with real data
+  const [onlineDrivers, setOnlineDrivers] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshOnlineDrivers = async () => {
+      try {
+        const drivers = await listDrivers();
+        if (cancelled) return;
+        setOnlineDrivers(drivers.filter((d) => d.online_status === 'online').length);
+      } catch (err) {
+        console.error('Failed to fetch online driver count:', err);
+      }
+    };
+
+    refreshOnlineDrivers();
+    const intervalId = setInterval(refreshOnlineDrivers, 30000);
+
+    const presenceChannel = supabase
+      .channel('dashboard-driver-presence')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_presence' }, () => {
+        refreshOnlineDrivers();
+      })
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+      supabase.removeChannel(presenceChannel);
+    };
+  }, []);
 
   const handleLogout = async (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -236,19 +269,13 @@ export function DashboardLayout() {
 
   return (
     <InboxProvider>
-    <div className="min-h-screen bg-[#0F0F0F]">
+    <div className="min-h-screen bg-[#F5F2EB] portalNumbers">
       {/* Sidebar for desktop */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
         <div className="flex flex-col flex-grow bg-[#161616] border-r border-gray-800">
           {/* Logo */}
-          <div className="flex items-center h-16 px-6 border-b border-gray-800">
-            <div className="w-10 h-10 bg-[#FF6B35] rounded-lg flex items-center justify-center mr-3">
-              <Truck className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-white">TransLine</h1>
-              <p className="text-xs text-gray-400">Admin Portal</p>
-            </div>
+          <div className="flex items-center h-16 px-4 border-b border-gray-800">
+            <img src={logo} alt="Transline Logistics" className="w-[174px] h-auto" />
           </div>
 
           {/* Navigation */}
@@ -261,10 +288,10 @@ export function DashboardLayout() {
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+                  className={`flex items-center px-4 py-3 text-sm font-medium transition-colors border-l-2 ${
                     isActive
-                      ? 'bg-[#FF6B35] text-white'
-                      : 'text-gray-300 hover:bg-[#0F0F0F] hover:text-white'
+                      ? 'bg-[#BE1C2D] border-[#E2485A] text-white'
+                      : 'border-transparent text-gray-300 hover:bg-[#0F0F0F] hover:text-white'
                   }`}
                 >
                   <Icon className="w-5 h-5 mr-3" />
@@ -309,15 +336,9 @@ export function DashboardLayout() {
             }}
           >
             <div className="flex flex-col h-full">
-              <div className="flex items-center justify-between h-16 px-6 border-b border-gray-800">
+              <div className="flex items-center justify-between h-16 px-4 border-b border-gray-800">
                 <div className="flex items-center">
-                  <div className="w-10 h-10 bg-[#FF6B35] rounded-lg flex items-center justify-center mr-3">
-                    <Truck className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h1 className="text-lg font-bold text-white">TransLine</h1>
-                    <p className="text-xs text-gray-400">Admin Portal</p>
-                  </div>
+                  <img src={logo} alt="Transline Logistics" className="w-[166px] h-auto" />
                 </div>
                 <Button
                   variant="ghost"
@@ -339,10 +360,10 @@ export function DashboardLayout() {
                       key={item.name}
                       to={item.href}
                       onClick={() => setSidebarOpen(false)}
-                      className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+                      className={`flex items-center px-4 py-3 text-sm font-medium transition-colors border-l-2 ${
                         isActive
-                          ? 'bg-[#FF6B35] text-white'
-                          : 'text-gray-300 hover:bg-[#0F0F0F] hover:text-white'
+                          ? 'bg-[#BE1C2D] border-[#E2485A] text-white'
+                          : 'border-transparent text-gray-300 hover:bg-[#0F0F0F] hover:text-white'
                       }`}
                     >
                       <Icon className="w-5 h-5 mr-3" />
@@ -409,7 +430,7 @@ export function DashboardLayout() {
                   <p className="text-sm font-medium text-white">{user?.email || 'Admin'}</p>
                   <p className="text-xs text-gray-400">Administrator</p>
                 </div>
-                <div className="w-10 h-10 bg-[#FF6B35] rounded-full flex items-center justify-center text-white font-medium">
+                <div className="w-10 h-10 bg-[#BE1C2D] rounded-full flex items-center justify-center text-white font-medium">
                   {user?.email?.[0].toUpperCase() || 'A'}
                 </div>
               </div>
@@ -418,7 +439,7 @@ export function DashboardLayout() {
         </header>
 
         {/* Page content */}
-        <main className="p-4 sm:p-6 lg:p-8">
+        <main className="portalWorkspace p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
       </div>

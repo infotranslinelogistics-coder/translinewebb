@@ -13,6 +13,7 @@ import {
 } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { listLatestLocationsByDrivers } from '@/lib/db/locations';
+import { listDriverEmails } from '@/lib/api/admin';
 import { listVehicles, Vehicle } from '@/lib/db/vehicles';
 import { clearOdometerPhotoCache, getOdometerPhotoUrl } from '@/lib/storage/odometerPhotos';
 import { formatPerthDateTime } from '@/lib/dateTime';
@@ -71,7 +72,7 @@ function statusBadge(s: string | null | undefined) {
   if (s === 'active') return 'bg-blue-950 text-blue-300 border-blue-800';
   if (s === 'completed') return 'bg-green-950 text-green-400 border-green-900';
   if (s === 'cancelled') return 'bg-red-950 text-red-400 border-red-900';
-  return 'bg-gray-800 text-gray-400 border-gray-700';
+  return 'bg-gray-800 text-gray-400 border-[#C4C0B7]';
 }
 
 export function DriverProfilePage() {
@@ -140,19 +141,31 @@ export function DriverProfilePage() {
         setLoading(true);
         const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
         const weekEnd   = endOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
-        const [driverRes, statusRes, assignRes, vehicleList, activeShiftRes, latestOdoRes, weeklyRes, locationRows] =
+        const [driverRes, contactRes, statusRes, assignRes, vehicleList, activeShiftRes, latestOdoRes, weeklyRes, locationRows] =
           await Promise.all([
             supabase.from('drivers_full').select('*').eq('driver_id', driverId).maybeSingle(),
+            supabase.from('drivers').select('user_id, profiles!drivers_user_id_fkey ( phone )').eq('id', driverId).maybeSingle(),
             supabase.from('view_driver_current_status').select('*').eq('driver_id', driverId).maybeSingle(),
             supabase.from('drivers_with_current_vehicle').select('current_vehicle_id, current_vehicle_rego').eq('driver_id', driverId).maybeSingle(),
             listVehicles(),
             supabase.from('shifts').select('*').eq('driver_id', driverId).or('status.eq.active,ended_at.is.null').order('started_at', { ascending: false }).limit(1),
-            supabase.from('odometer_readings').select('id, driver_id, vehicle_id, shift_id, reading, photo_path, captured_at, created_at, lat, lng').eq('driver_id', driverId).order('captured_at', { ascending: false }).limit(1),
+            supabase.from('odometer_readings_feed').select('id, driver_id, vehicle_id, shift_id, reading, photo_path, captured_at, created_at, lat, lng').eq('driver_id', driverId).order('captured_at', { ascending: false }).limit(1),
             // Fetch all shifts that OVERLAP this week (started before weekEnd AND (ended after weekStart OR still active))
             supabase.from('shifts').select('id, driver_id, vehicle_id, started_at, ended_at, status').eq('driver_id', driverId).lte('started_at', weekEnd).or(`ended_at.gte.${weekStart},ended_at.is.null`),
             listLatestLocationsByDrivers([driverId]),
           ]);
-        setDriver((driverRes.data as DriverRow) ?? null);
+        const contactData = contactRes.data as { user_id?: string | null; profiles?: { phone?: string | null } | null } | null;
+        const contact = contactData?.profiles;
+        let email: string | null = null;
+        if (contactData?.user_id) {
+          try {
+            const emails = await listDriverEmails([contactData.user_id]);
+            email = emails[contactData.user_id] ?? null;
+          } catch (emailErr) {
+            console.error('[DriverProfile] listDriverEmails failed', emailErr);
+          }
+        }
+        setDriver(driverRes.data ? { ...(driverRes.data as DriverRow), email: email ?? (driverRes.data as DriverRow).email, phone: contact?.phone ?? (driverRes.data as DriverRow).phone } : null);
         setStatus((statusRes.data as DriverStatusRow) ?? null);
         setAssignmentSnapshot((assignRes.data as DriverAssignmentSnapshot) ?? null);
         setVehicles(vehicleList ?? []);
@@ -205,7 +218,7 @@ export function DriverProfilePage() {
     if (!driverId) return;
     const run = async () => {
       const from = (odometerPage - 1) * PAGE_SIZE;
-      const { data, error: e, count } = await supabase.from('odometer_readings').select('id, driver_id, vehicle_id, shift_id, reading, photo_path, captured_at, created_at, lat, lng', { count: 'exact' }).eq('driver_id', driverId).order('captured_at', { ascending: false }).range(from, from + PAGE_SIZE - 1);
+      const { data, error: e, count } = await supabase.from('odometer_readings_feed').select('id, driver_id, vehicle_id, shift_id, reading, photo_path, captured_at, created_at, lat, lng', { count: 'exact' }).eq('driver_id', driverId).order('captured_at', { ascending: false }).range(from, from + PAGE_SIZE - 1);
       if (e) { console.error(e); return; }
       setOdometerLogs(await Promise.all(((data as OdometerRow[]) ?? []).map(resolveOdometerPhoto)));
       setOdometerCount(count ?? 0);
@@ -240,7 +253,7 @@ export function DriverProfilePage() {
       map.setView([lat, lng], 15);
       const heading = status?.heading ?? 0;
       const icon = L.divIcon({
-        html: `<div style="width:36px;height:36px;background:#FF6B35;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 0 12px rgba(255,107,53,0.6);transform:rotate(${heading}deg)"><svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M12 2L4 20l8-4 8 4L12 2z"/></svg></div>`,
+        html: `<div style="width:36px;height:36px;background:#BE1C2D;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 0 12px rgba(190,28,45,0.45);transform:rotate(${heading}deg)"><svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M12 2L4 20l8-4 8 4L12 2z"/></svg></div>`,
         className: '', iconSize: [36, 36], iconAnchor: [18, 18],
       });
       const marker = L.marker([lat, lng], { icon }).addTo(map);
@@ -272,7 +285,7 @@ export function DriverProfilePage() {
   }, [driverId]);
 
   if (!driverId) return <p className="text-gray-400">Driver ID missing.</p>;
-  if (loading) return <div className="flex justify-center py-16"><Loader className="w-8 h-8 text-[#FF6B35] animate-spin" /></div>;
+  if (loading) return <div className="flex justify-center py-16"><Loader className="w-8 h-8 text-[#BE1C2D] animate-spin" /></div>;
 
   const driverName = driver?.full_name ?? driver?.name ?? driver?.email ?? driverId;
   const driverEmail = pickFirstText(driver?.email, driver?.profile_email);
@@ -317,29 +330,29 @@ export function DriverProfilePage() {
             {driver?.licence_number && <span className="text-gray-500">Licence: {driver.licence_number}</span>}
           </div>
         </div>
-        <Button variant="default" className="bg-[#FF6B35] text-white hover:bg-[#e55a25] shrink-0" onClick={() => navigate('/drivers')}>
+        <Button variant="default" className="bg-[#BE1C2D] text-white hover:bg-[#e55a25] shrink-0" onClick={() => navigate('/drivers')}>
           <ArrowLeft className="w-4 h-4 mr-2" />Back to Drivers
         </Button>
       </div>
 
       {/* Status strip */}
       <div className="flex flex-wrap gap-2">
-        {isOnline ? <Badge className="bg-green-950 text-green-400 border-green-900">Online</Badge> : <Badge className="bg-gray-900 text-gray-400 border-gray-700">Offline</Badge>}
-        {activeShift ? <Badge className="bg-blue-950 text-blue-300 border-blue-800">On Shift</Badge> : <Badge className="bg-gray-900 text-gray-400 border-gray-700">Off Shift</Badge>}
+        {isOnline ? <Badge className="bg-green-950 text-green-400 border-green-900">Online</Badge> : <Badge className="bg-gray-900 text-gray-400 border-[#C4C0B7]">Offline</Badge>}
+        {activeShift ? <Badge className="bg-blue-950 text-blue-300 border-blue-800">On Shift</Badge> : <Badge className="bg-gray-900 text-gray-400 border-[#C4C0B7]">Off Shift</Badge>}
         {status?.on_break && <Badge className="bg-amber-950 text-amber-300 border-amber-800">On Break</Badge>}
         {gpsActive && <Badge className="bg-purple-950 text-purple-300 border-purple-800 flex items-center gap-1"><Navigation className="w-3 h-3" />GPS Active</Badge>}
-        {driver?.status && <Badge className="bg-gray-900 text-gray-300 border-gray-700 capitalize">{driver.status}</Badge>}
+        {driver?.status && <Badge className="bg-gray-900 text-gray-300 border-[#C4C0B7] capitalize">{driver.status}</Badge>}
       </div>
 
       {/* Weekly stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Hours This Week',  value: `${hoursThisWeek.toFixed(1)}h`,                                      icon: Clock,      color: 'text-[#FF6B35]'  },
+          { label: 'Hours This Week',  value: `${hoursThisWeek.toFixed(1)}h`,                                      icon: Clock,      color: 'text-[#BE1C2D]'  },
           { label: 'Shifts This Week', value: String(weeklyShifts.length),                                          icon: Activity,   color: 'text-blue-400'   },
           { label: 'Avg Shift Length', value: weeklyShifts.length ? `${avgShiftHours.toFixed(1)}h` : '—',          icon: TrendingUp, color: 'text-green-400'  },
           { label: 'Total Shifts',     value: String(shiftCount),                                                   icon: Activity,   color: 'text-purple-400' },
         ].map(({ label, value, icon: Icon, color }) => (
-          <Card key={label} className="bg-[#161616] border-gray-800">
+          <Card key={label} className="bg-[#FFFEFA] border-[#D7D3CA]">
             <CardContent className="p-4 flex items-center gap-3">
               <Icon className={`w-8 h-8 ${color} shrink-0`} />
               <div><p className="text-xs text-gray-500">{label}</p><p className="text-xl font-semibold text-white">{value}</p></div>
@@ -349,7 +362,7 @@ export function DriverProfilePage() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="bg-[#161616] border border-gray-800">
+        <TabsList className="bg-[#FFFEFA] border border-[#D7D3CA]">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="shifts">Shifts</TabsTrigger>
           <TabsTrigger value="assignments">Vehicle Assignments</TabsTrigger>
@@ -360,7 +373,7 @@ export function DriverProfilePage() {
         {/* Overview */}
         <TabsContent value="overview">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="bg-[#161616] border-gray-800">
+            <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
               <CardHeader>
                 <CardTitle className="text-white">Driver Details</CardTitle>
                 <CardDescription className="text-gray-400">Core contact and identity information</CardDescription>
@@ -382,7 +395,7 @@ export function DriverProfilePage() {
               </CardContent>
             </Card>
 
-            <Card className="bg-[#161616] border-gray-800">
+            <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
               <CardHeader>
                 <CardTitle className="text-white">Current Status</CardTitle>
                 <CardDescription className="text-gray-400">Live operational indicators</CardDescription>
@@ -406,17 +419,17 @@ export function DriverProfilePage() {
                   ))}
                 </div>
                 {activeShift && (
-                  <Button variant="default" size="sm" className="mt-2 bg-[#FF6B35] text-white hover:bg-[#e55a25]" onClick={() => navigate(`/shifts/${activeShift.id}`)}>
+                  <Button variant="default" size="sm" className="mt-2 bg-[#BE1C2D] text-white hover:bg-[#e55a25]" onClick={() => navigate(`/shifts/${activeShift.id}`)}>
                     View Active Shift Details
                   </Button>
                 )}
               </CardContent>
             </Card>
 
-            <Card className="bg-[#161616] border-gray-800">
+            <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
-                  <Navigation className="w-4 h-4 text-[#FF6B35]" />Live GPS
+                  <Navigation className="w-4 h-4 text-[#BE1C2D]" />Live GPS
                   {gpsActive && <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block ml-1" />}
                 </CardTitle>
                 <CardDescription className="text-gray-400">
@@ -430,11 +443,11 @@ export function DriverProfilePage() {
                   <>
                     <div ref={gpsMapRef} className="w-full rounded-b-lg" style={{ height: 280 }} />
                     <div className="px-4 py-2 flex gap-2">
-                      <Button asChild size="sm" className="bg-[#FF6B35] text-white hover:bg-[#e55a25] text-xs">
+                      <Button asChild size="sm" className="bg-[#BE1C2D] text-white hover:bg-[#e55a25] text-xs">
                         <a href={`https://www.google.com/maps?q=${latestLocation.latitude},${latestLocation.longitude}`} target="_blank" rel="noopener noreferrer">Open in Google Maps</a>
                       </Button>
                       {assignedVehicle && (
-                        <Button size="sm" className="bg-[#FF6B35] text-white hover:bg-[#e55a25] text-xs" onClick={() => navigate(`/vehicles/${assignmentSnapshot?.current_vehicle_id}`)}>Vehicle Details</Button>
+                        <Button size="sm" className="bg-[#BE1C2D] text-white hover:bg-[#e55a25] text-xs" onClick={() => navigate(`/vehicles/${assignmentSnapshot?.current_vehicle_id}`)}>Vehicle Details</Button>
                       )}
                     </div>
                   </>
@@ -447,7 +460,7 @@ export function DriverProfilePage() {
             </Card>
 
             {latestOdometer && (
-              <Card className="bg-[#161616] border-gray-800">
+              <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
                 <CardHeader>
                   <CardTitle className="text-white">Latest Odometer</CardTitle>
                   <CardDescription className="text-gray-400">Most recent submission</CardDescription>
@@ -474,7 +487,7 @@ export function DriverProfilePage() {
 
         {/* Shifts */}
         <TabsContent value="shifts">
-          <Card className="bg-[#161616] border-gray-800">
+          <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
             <CardHeader>
               <CardTitle className="text-white">Shift History</CardTitle>
               <CardDescription className="text-gray-400">{shiftCount} total shifts</CardDescription>
@@ -482,7 +495,7 @@ export function DriverProfilePage() {
             <CardContent>
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">Start</TableHead>
                     <TableHead className="text-gray-400">End</TableHead>
                     <TableHead className="text-gray-400">Duration</TableHead>
@@ -500,7 +513,7 @@ export function DriverProfilePage() {
                     const dur = mins >= 60 ? `${(mins / 60).toFixed(1)}h` : `${mins}m`;
                     const vehicle = shift.vehicle_id ? vehicleMap.get(shift.vehicle_id) : null;
                     return (
-                      <TableRow key={shift.id} className="border-gray-800">
+                      <TableRow key={shift.id} className="border-[#D7D3CA]">
                         <TableCell className="text-gray-300">{fmtDate(shift.started_at)}</TableCell>
                         <TableCell className="text-gray-300">{shift.ended_at ? fmtDate(shift.ended_at) : <Badge className="bg-blue-950 text-blue-300 border-blue-800">Active</Badge>}</TableCell>
                         <TableCell className="text-gray-300">{dur}</TableCell>
@@ -526,7 +539,7 @@ export function DriverProfilePage() {
 
         {/* Assignments */}
         <TabsContent value="assignments">
-          <Card className="bg-[#161616] border-gray-800">
+          <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
             <CardHeader>
               <CardTitle className="text-white">Vehicle Assignments</CardTitle>
               <CardDescription className="text-gray-400">Timeline of assigned vehicles</CardDescription>
@@ -534,7 +547,7 @@ export function DriverProfilePage() {
             <CardContent>
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">Assigned</TableHead>
                     <TableHead className="text-gray-400">Unassigned</TableHead>
                     <TableHead className="text-gray-400">Vehicle</TableHead>
@@ -550,7 +563,7 @@ export function DriverProfilePage() {
                     const durMins = differenceInMinutes(a.unassigned_at ? new Date(a.unassigned_at) : new Date(), new Date(a.assigned_at));
                     const durLabel = durMins >= 1440 ? `${(durMins / 1440).toFixed(0)}d` : durMins >= 60 ? `${(durMins / 60).toFixed(0)}h` : `${durMins}m`;
                     return (
-                      <TableRow key={a.id} className="border-gray-800">
+                      <TableRow key={a.id} className="border-[#D7D3CA]">
                         <TableCell className="text-gray-300">{fmtDate(a.assigned_at)}</TableCell>
                         <TableCell className="text-gray-300">{a.unassigned_at ? fmtDate(a.unassigned_at) : <Badge className="bg-green-950 text-green-400 border-green-900">Current</Badge>}</TableCell>
                         <TableCell className="text-gray-300">{formatVehicleLabel(vehicle) ?? a.vehicle_id}</TableCell>
@@ -574,7 +587,7 @@ export function DriverProfilePage() {
 
         {/* Odometer */}
         <TabsContent value="odometer">
-          <Card className="bg-[#161616] border-gray-800">
+          <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
             <CardHeader>
               <CardTitle className="text-white">Odometer Logs</CardTitle>
               <CardDescription className="text-gray-400">Latest odometer submissions</CardDescription>
@@ -582,7 +595,7 @@ export function DriverProfilePage() {
             <CardContent>
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">Recorded</TableHead>
                     <TableHead className="text-gray-400">Vehicle</TableHead>
                     <TableHead className="text-gray-400">Reading</TableHead>
@@ -596,13 +609,13 @@ export function DriverProfilePage() {
                   ) : odometerLogs.map((log) => {
                     const vehicle = vehicleMap.get(log.vehicle_id);
                     return (
-                      <TableRow key={log.id} className="border-gray-800">
+                      <TableRow key={log.id} className="border-[#D7D3CA]">
                         <TableCell className="text-gray-300">{fmtDate(log.captured_at ?? log.created_at)}</TableCell>
                         <TableCell className="text-gray-300">{formatVehicleLabel(vehicle) ?? log.vehicle_id}</TableCell>
                         <TableCell className="text-gray-300">{log.reading != null ? `${log.reading.toLocaleString()} km` : '—'}</TableCell>
                         <TableCell className="text-gray-300">{log.lat != null && log.lng != null ? `${log.lat.toFixed(4)}, ${log.lng.toFixed(4)}` : '—'}</TableCell>
                         <TableCell className="text-gray-300">
-                          {log.signed_url ? <img src={log.signed_url} alt="Odometer" className="h-12 w-20 rounded border border-gray-700 object-cover" />
+                          {log.signed_url ? <img src={log.signed_url} alt="Odometer" className="h-12 w-20 rounded border border-[#C4C0B7] object-cover" />
                             : log.photo_error ? <div className="flex items-center gap-2 text-sm text-red-300"><span>Failed</span><Button variant="ghost" size="sm" className="text-red-300 hover:text-red-200" onClick={async () => { clearOdometerPhotoCache(log.photo_path ?? null); const r = await resolveOdometerPhoto(log); setOdometerLogs((prev) => prev.map((x) => x.id === log.id ? r : x)); }}>Retry</Button></div>
                             : 'No photo'}
                         </TableCell>
@@ -624,7 +637,7 @@ export function DriverProfilePage() {
 
         {/* Status History */}
         <TabsContent value="status">
-          <Card className="bg-[#161616] border-gray-800">
+          <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
             <CardHeader>
               <CardTitle className="text-white">Status History</CardTitle>
               <CardDescription className="text-gray-400">Driver status events timeline</CardDescription>
@@ -632,7 +645,7 @@ export function DriverProfilePage() {
             <CardContent>
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">State</TableHead>
                     <TableHead className="text-gray-400">Started</TableHead>
                     <TableHead className="text-gray-400">Ended</TableHead>
@@ -647,7 +660,7 @@ export function DriverProfilePage() {
                     const durMins = ev.started_at && ev.ended_at ? differenceInMinutes(new Date(ev.ended_at), new Date(ev.started_at)) : null;
                     const durLabel = durMins != null ? durMins >= 60 ? `${(durMins / 60).toFixed(1)}h` : `${durMins}m` : '—';
                     return (
-                      <TableRow key={ev.id} className="border-gray-800">
+                      <TableRow key={ev.id} className="border-[#D7D3CA]">
                         <TableCell className="text-gray-300 capitalize">{ev.state ?? 'unknown'}</TableCell>
                         <TableCell className="text-gray-300">{fmtDate(ev.started_at)}</TableCell>
                         <TableCell className="text-gray-300">{ev.ended_at ? fmtDate(ev.ended_at) : <Badge className="bg-blue-950 text-blue-300 border-blue-800">Active</Badge>}</TableCell>

@@ -1,77 +1,24 @@
-import { useEffect, useState } from 'react';
 import { Analytics } from '@vercel/analytics/react';
-import { Header } from './components/Header';
 import { Footer } from './components/Footer';
+import { Header } from './components/Header';
 import { HomePage } from './components/HomePage';
-import { ServicesPage } from './components/ServicesPage';
-import { FleetPage } from './components/FleetPage';
-import { ContactPage } from './components/ContactPage';
-import { FaqPage } from './components/FaqPage';
-import { QuotePage } from './components/QuotePage';
-import { PrivacyPage } from './components/PrivacyPage';
-import { TermsPage } from './components/TermsPage';
+import { Pages } from './site/Pages';
+import { getPage } from './site/catalog';
+import './site/site.css';
 
-export type Page = 'home' | 'services' | 'fleet' | 'contact' | 'faq' | 'quote' | 'privacy' | 'terms';
+export type Page = 'home' | 'services' | 'fleet' | 'contact' | 'quote' | 'faq' | 'privacy' | 'terms';
 
-export default function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('home');
-
-  useEffect(() => {
-    const elements = document.querySelectorAll('.scroll-reveal');
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('is-visible');
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-
-    elements.forEach((el, index) => {
-      const delay = Math.min(index * 0.08, 0.6);
-      (el as HTMLElement).style.setProperty('--reveal-delay', `${delay}s`);
-      observer.observe(el);
-    });
-
-    return () => observer.disconnect();
-  }, [currentPage]);
-
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'home':
-        return <HomePage onNavigate={setCurrentPage} />;
-      case 'services':
-        return <ServicesPage onNavigate={setCurrentPage} />;
-      case 'fleet':
-        return <FleetPage onNavigate={setCurrentPage} />;
-      case 'contact':
-        return <ContactPage />;
-      case 'faq':
-        return <FaqPage onNavigate={setCurrentPage} />;
-      case 'quote':
-        return <QuotePage />;
-      case 'privacy':
-        return <PrivacyPage />;
-      case 'terms':
-        return <TermsPage />;
-      default:
-        return <HomePage onNavigate={setCurrentPage} />;
-    }
-  };
-
+export default function App({ path = '/' }: { path?: string }) {
+  const page = getPage(path);
   return (
-    <>
-      <div className="min-h-screen flex flex-col">
-        <Header currentPage={currentPage} onNavigate={setCurrentPage} />
-        <main className="flex-1">
-          {renderPage()}
-        </main>
-        <Footer onNavigate={setCurrentPage} />
-      </div>
+    <div className="min-h-screen bg-surface-dark text-surface-white">
+      <a className="skipLink" href="#main-content">Skip to content</a>
+      <Header path={page.path} />
+      <main id="main-content">
+        {page.kind === 'home' ? <HomePage /> : <Pages page={page} />}
+      </main>
+      <Footer />
       <Analytics />
-    </>
+    </div>
   );
 }

@@ -451,16 +451,16 @@ export function FuelLogsPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6 flex items-center gap-3">
-            <Receipt className="w-8 h-8 text-[#FF6B35]" />
+            <Receipt className="w-8 h-8 text-[#BE1C2D]" />
             <div>
               <p className="text-sm text-gray-400 mb-1">Weekly Fuel Logs</p>
               <p className="text-3xl font-bold text-white">{weeklySummary.totalFuelLogs}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6 flex items-center gap-3">
             <Droplets className="w-8 h-8 text-blue-400" />
             <div>
@@ -469,7 +469,7 @@ export function FuelLogsPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6 flex items-center gap-3">
             <Receipt className="w-8 h-8 text-green-400" />
             <div>
@@ -478,7 +478,7 @@ export function FuelLogsPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[#161616] border-gray-800">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
           <CardContent className="p-6 flex items-center gap-3">
             <Droplets className="w-8 h-8 text-yellow-400" />
             <div>
@@ -489,7 +489,7 @@ export function FuelLogsPage() {
         </Card>
       </div>
 
-      <Card className="bg-[#161616] border-gray-800">
+      <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
         <CardHeader>
           <CardTitle className="text-white">Filters</CardTitle>
           <CardDescription className="text-gray-400">Refine fuel logs by driver, vehicle, and date range. All times shown in {PERTH_TIME_LABEL}.</CardDescription>
@@ -498,7 +498,7 @@ export function FuelLogsPage() {
           <div className="space-y-2">
             <Label className="text-gray-300">Driver</Label>
             <Select value={driverFilter} onValueChange={setDriverFilter}>
-              <SelectTrigger className="bg-[#0F0F0F] border-gray-700 text-white">
+              <SelectTrigger className="bg-[#F5F2EB] border-[#C4C0B7] text-white">
                 <SelectValue placeholder="All drivers" />
               </SelectTrigger>
               <SelectContent>
@@ -519,7 +519,7 @@ export function FuelLogsPage() {
           <div className="space-y-2">
             <Label className="text-gray-300">Vehicle</Label>
             <Select value={vehicleFilter} onValueChange={setVehicleFilter}>
-              <SelectTrigger className="bg-[#0F0F0F] border-gray-700 text-white">
+              <SelectTrigger className="bg-[#F5F2EB] border-[#C4C0B7] text-white">
                 <SelectValue placeholder="All vehicles" />
               </SelectTrigger>
               <SelectContent>
@@ -539,7 +539,7 @@ export function FuelLogsPage() {
               type="date"
               value={startDate}
               onChange={(event) => setStartDate(event.target.value)}
-              className="bg-[#0F0F0F] border-gray-700 text-white"
+              className="bg-[#F5F2EB] border-[#C4C0B7] text-white"
             />
           </div>
 
@@ -549,13 +549,13 @@ export function FuelLogsPage() {
               type="date"
               value={endDate}
               onChange={(event) => setEndDate(event.target.value)}
-              className="bg-[#0F0F0F] border-gray-700 text-white"
+              className="bg-[#F5F2EB] border-[#C4C0B7] text-white"
             />
           </div>
         </CardContent>
       </Card>
 
-      <Card className="bg-[#161616] border-gray-800">
+      <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
         <CardHeader>
           <CardTitle className="text-white">Fuel Log Entries</CardTitle>
           <CardDescription className="text-gray-400">Receipt-backed fuel events captured during shifts</CardDescription>
@@ -563,13 +563,13 @@ export function FuelLogsPage() {
         <CardContent>
           {loading ? (
             <div className="flex justify-center py-16">
-              <Loader className="w-8 h-8 text-[#FF6B35] animate-spin" />
+              <Loader className="w-8 h-8 text-[#BE1C2D] animate-spin" />
             </div>
           ) : (
             <>
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
+                  <TableRow className="border-[#D7D3CA] hover:bg-transparent">
                     <TableHead className="text-gray-400">Created</TableHead>
                     <TableHead className="text-gray-400">Driver</TableHead>
                     <TableHead className="text-gray-400">Vehicle</TableHead>
@@ -602,7 +602,7 @@ export function FuelLogsPage() {
                     const reviewing = reviewingIds.includes(row.id);
 
                     return (
-                      <TableRow key={row.id} className="border-gray-800">
+                      <TableRow key={row.id} className="border-[#D7D3CA]">
                         <TableCell className="text-gray-300">{formatDateTime(row.created_at)}</TableCell>
                         <TableCell className="text-gray-300">{driverLabel}</TableCell>
                         <TableCell className="text-gray-300">{vehicleLabel}</TableCell>
@@ -611,7 +611,7 @@ export function FuelLogsPage() {
                             <span className="text-xs text-gray-500">{shiftId ? `${shiftId.slice(0, 8)}...` : '—'}</span>
                             <Button
                               size="sm"
-                              className="bg-[#FF6B35] text-white hover:bg-[#e55a25] text-xs"
+                              className="bg-[#BE1C2D] text-white hover:bg-[#e55a25] text-xs"
                               disabled={!shiftId}
                               onClick={() => {
                                 if (!shiftId) return;
@@ -639,7 +639,7 @@ export function FuelLogsPage() {
                                 href={`https://www.google.com/maps?q=${metadata.lat},${metadata.lng}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-[#FF6B35] hover:underline"
+                                className="inline-flex items-center gap-1 text-[#BE1C2D] hover:underline"
                               >
                                 <MapPin className="w-3 h-3" />
                                 Open in Maps
@@ -652,7 +652,7 @@ export function FuelLogsPage() {
                             <div className="flex items-center gap-2">
                               <Button
                                 size="sm"
-                                className="bg-[#FF6B35] text-white hover:bg-[#e55a25] text-xs"
+                                className="bg-[#BE1C2D] text-white hover:bg-[#e55a25] text-xs"
                                 onClick={() => setPreviewUrl(row.receipt_url ?? null)}
                               >
                                 <ImageIcon className="w-3.5 h-3.5 mr-1" />
@@ -662,7 +662,7 @@ export function FuelLogsPage() {
                                 href={row.receipt_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-[#FF6B35] hover:underline inline-flex items-center gap-1 text-xs"
+                                className="text-[#BE1C2D] hover:underline inline-flex items-center gap-1 text-xs"
                               >
                                 <ExternalLink className="w-3 h-3" />
                                 Open
@@ -672,12 +672,12 @@ export function FuelLogsPage() {
                         </TableCell>
                         <TableCell className="text-gray-300">
                           <div className="flex flex-col items-start gap-2">
-                            <Badge className={reviewed ? 'bg-green-950 text-green-400 border-green-900' : 'bg-gray-900 text-gray-300 border-gray-700'}>
+                            <Badge className={reviewed ? 'bg-green-950 text-green-400 border-green-900' : 'bg-gray-900 text-gray-300 border-[#C4C0B7]'}>
                               {reviewed ? 'Seen' : 'Unseen'}
                             </Badge>
                             <Button
                               size="sm"
-                              className="bg-[#FF6B35] text-white hover:bg-[#e55a25] text-xs"
+                              className="bg-[#BE1C2D] text-white hover:bg-[#e55a25] text-xs"
                               disabled={reviewing}
                               onClick={() => handleToggleReviewed(row)}
                             >
@@ -731,18 +731,18 @@ export function FuelLogsPage() {
       </Card>
 
       <Dialog open={Boolean(previewUrl)} onOpenChange={(open) => !open && setPreviewUrl(null)}>
-        <DialogContent className="bg-[#161616] border-gray-800 max-w-3xl [&>button]:text-[#FF6B35] [&>button:hover]:text-[#e55a25]">
+        <DialogContent className="bg-[#FFFEFA] border-[#D7D3CA] max-w-3xl [&>button]:text-[#BE1C2D] [&>button:hover]:text-[#e55a25]">
           <DialogHeader>
             <DialogTitle className="text-white">Fuel Receipt</DialogTitle>
           </DialogHeader>
           {previewUrl ? (
-            <img src={previewUrl} alt="Fuel receipt" className="w-full max-h-[75vh] object-contain rounded-lg border border-gray-800" />
+            <img src={previewUrl} alt="Fuel receipt" className="w-full max-h-[75vh] object-contain rounded-lg border border-[#D7D3CA]" />
           ) : null}
         </DialogContent>
       </Dialog>
 
       <AlertDialog open={Boolean(deleteFuelLogId)} onOpenChange={(open) => !open && setDeleteFuelLogId(null)}>
-        <AlertDialogContent className="bg-[#161616] border-gray-800">
+        <AlertDialogContent className="bg-[#FFFEFA] border-[#D7D3CA]">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">Delete Fuel Log</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">

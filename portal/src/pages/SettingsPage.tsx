@@ -172,7 +172,7 @@ export function SettingsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Admin Profile */}
-        <Card className="bg-[#161616] border-gray-800 lg:col-span-2">
+        <Card className="bg-[#FFFEFA] border-[#D7D3CA] lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
               <User className="w-5 h-5" />
@@ -191,7 +191,7 @@ export function SettingsPage() {
                   type="email"
                   value={user?.email || ''}
                   disabled
-                  className="bg-[#0F0F0F] border-gray-700 text-gray-400"
+                  className="bg-[#F5F2EB] border-[#C4C0B7] text-gray-400"
                 />
               </div>
 
@@ -201,7 +201,7 @@ export function SettingsPage() {
                   id="role"
                   value="Administrator"
                   disabled
-                  className="bg-[#0F0F0F] border-gray-700 text-gray-400"
+                  className="bg-[#F5F2EB] border-[#C4C0B7] text-gray-400"
                 />
               </div>
 
@@ -214,7 +214,7 @@ export function SettingsPage() {
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
+                  className="bg-[#F5F2EB] border-[#C4C0B7] text-white placeholder:text-gray-500"
                 />
               </div>
 
@@ -227,7 +227,7 @@ export function SettingsPage() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
+                  className="bg-[#F5F2EB] border-[#C4C0B7] text-white placeholder:text-gray-500"
                 />
               </div>
 
@@ -240,7 +240,7 @@ export function SettingsPage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="bg-[#0F0F0F] border-gray-700 text-white placeholder:text-gray-500"
+                  className="bg-[#F5F2EB] border-[#C4C0B7] text-white placeholder:text-gray-500"
                 />
               </div>
 
@@ -254,7 +254,7 @@ export function SettingsPage() {
               <Button
                 type="submit"
                 disabled={passwordSaving}
-                className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
+                className="bg-[#BE1C2D] hover:bg-[#A81828] text-white"
               >
                 {passwordSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 {passwordSaving ? 'Updating...' : 'Update Password'}
@@ -265,7 +265,7 @@ export function SettingsPage() {
 
         {/* System Status */}
         <div className="space-y-6">
-          <Card className="bg-[#161616] border-gray-800">
+          <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-white">
                 <Database className="w-5 h-5" />
@@ -282,7 +282,7 @@ export function SettingsPage() {
                   <p className="text-xs text-gray-500">Database connection</p>
                 </div>
                 {supabaseStatus === 'checking' ? (
-                  <Badge className="bg-gray-800 text-gray-400 border-gray-700">
+                  <Badge className="bg-gray-800 text-gray-400 border-[#C4C0B7]">
                     <Loader2 className="w-3 h-3 mr-1 animate-spin" />
                     Checking
                   </Badge>
@@ -332,7 +332,7 @@ export function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="bg-[#161616] border-gray-800">
+          <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-white">
                 <Shield className="w-5 h-5" />
@@ -345,7 +345,7 @@ export function SettingsPage() {
             <CardContent className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-white">Two-Factor Auth</p>
-                <Badge className="bg-gray-800 text-gray-400 border-gray-700">
+                <Badge className="bg-gray-800 text-gray-400 border-[#C4C0B7]">
                   Disabled
                 </Badge>
               </div>
@@ -361,7 +361,7 @@ export function SettingsPage() {
       </div>
 
       {/* Notifications Settings */}
-      <Card className="bg-[#161616] border-gray-800">
+      <Card className="bg-[#FFFEFA] border-[#D7D3CA]">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
             <Bell className="w-5 h-5" />
@@ -382,7 +382,7 @@ export function SettingsPage() {
                       type="checkbox"
                       checked={!!notificationPrefs[item]}
                       onChange={() => toggleNotification(item)}
-                      className="w-4 h-4 rounded border-gray-700 bg-[#0F0F0F] text-[#FF6B35] focus:ring-[#FF6B35]"
+                      className="w-4 h-4 rounded border-[#C4C0B7] bg-[#F5F2EB] text-[#BE1C2D] focus:ring-[#BE1C2D]"
                     />
                     <span className="text-sm text-gray-300">{item}</span>
                   </label>
@@ -399,7 +399,7 @@ export function SettingsPage() {
                       type="checkbox"
                       checked={!!notificationPrefs[item]}
                       onChange={() => toggleNotification(item)}
-                      className="w-4 h-4 rounded border-gray-700 bg-[#0F0F0F] text-[#FF6B35] focus:ring-[#FF6B35]"
+                      className="w-4 h-4 rounded border-[#C4C0B7] bg-[#F5F2EB] text-[#BE1C2D] focus:ring-[#BE1C2D]"
                     />
                     <span className="text-sm text-gray-300">{item}</span>
                   </label>
@@ -408,10 +408,10 @@ export function SettingsPage() {
             </div>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-gray-800 flex items-center gap-4">
+          <div className="mt-6 pt-6 border-t border-[#D7D3CA] flex items-center gap-4">
             <Button
               onClick={handleSavePreferences}
-              className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
+              className="bg-[#BE1C2D] hover:bg-[#A81828] text-white"
             >
               Save Preferences
             </Button>
@@ -424,7 +424,7 @@ export function SettingsPage() {
 
       {/* Database Setup Instructions */}
       {supabaseStatus === 'disconnected' && (
-        <Card className="bg-[#161616] border-yellow-900/50 border-2">
+        <Card className="bg-[#FFFEFA] border-yellow-900/50 border-2">
           <CardHeader>
             <CardTitle className="text-yellow-400">Supabase Setup Required</CardTitle>
             <CardDescription className="text-gray-400">
@@ -435,12 +435,12 @@ export function SettingsPage() {
             <div className="space-y-3 text-sm text-gray-300">
               <p>To connect Supabase:</p>
               <ol className="list-decimal list-inside space-y-2 ml-4">
-                <li>Create a Supabase project at <a href="https://supabase.com" className="text-[#FF6B35] underline" target="_blank" rel="noopener noreferrer">supabase.com</a></li>
+                <li>Create a Supabase project at <a href="https://supabase.com" className="text-[#BE1C2D] underline" target="_blank" rel="noopener noreferrer">supabase.com</a></li>
                 <li>Add your Supabase URL and anon key to environment variables</li>
                 <li>Run the provided SQL migrations to create database tables</li>
                 <li>Restart the application</li>
               </ol>
-              <div className="mt-4 p-4 bg-[#0F0F0F] rounded-lg border border-gray-800">
+              <div className="mt-4 p-4 bg-[#F5F2EB] rounded-lg border border-[#D7D3CA]">
                 <p className="text-xs text-gray-400 mb-2">Environment Variables:</p>
                 <code className="text-xs text-green-400 block">
                   VITE_SUPABASE_URL=your-project-url

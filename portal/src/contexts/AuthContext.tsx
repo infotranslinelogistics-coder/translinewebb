@@ -10,6 +10,27 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: any; user?: User }>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
+  isAdmin: boolean;
+}
+
+/**
+ * The portal is admin-only. signIn() checks this, but a session restored from storage
+ * never passes through signIn(), so the role has to be re-verified for every session
+ * the provider adopts -- otherwise a driver account with a valid session lands straight
+ * in the admin portal on reload.
+ */
+async function fetchIsAdmin(userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Failed to verify portal access role:', error);
+    return false;
+  }
+  return data?.role === 'admin';
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     // Check for active session on mount
@@ -34,6 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (currentSession) {
           setSession(currentSession);
           setUser(currentSession.user);
+          setIsAdmin(await fetchIsAdmin(currentSession.user.id));
         }
       } catch (error) {
         console.error('Failed to get session:', error);
@@ -53,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
+      setIsAdmin(currentSession?.user ? await fetchIsAdmin(currentSession.user.id) : false);
       setLoading(false);
 
       // Persist session to localStorage if needed
@@ -82,28 +106,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error };
       }
 
-      // Portal is admin-only: block accounts linked to a driver record.
+      // Portal is admin-only: require profiles.role === 'admin'.
       if (data.user?.id) {
-        const { data: driverRow, error: driverLookupError } = await supabase
-          .from('drivers')
-          .select('id')
-          .eq('user_id', data.user.id)
-          .maybeSingle();
-
-        if (driverLookupError) {
-          console.error('Failed to verify portal access role:', driverLookupError);
-          console.error('Portal access role verification failed; preserving active auth session.');
+        if (!(await fetchIsAdmin(data.user.id))) {
+          console.error('Non-admin account detected during portal sign-in.');
+          await supabase.auth.signOut({ scope: 'local' });
+          setIsAdmin(false);
           return {
-            error: new Error('Unable to verify portal access right now. Please try again.'),
+            error: new Error('This account does not have admin access.'),
           };
         }
-
-        if (driverRow) {
-          console.error('Driver account detected during portal sign-in; preserving active auth session.');
-          return {
-            error: new Error('Drivers cannot log in to the admin portal.'),
-          };
-        }
+        setIsAdmin(true);
       }
 
       // Session is automatically set by onAuthStateChange listener
@@ -126,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Always clear local auth state so the UI reliably returns to login.
       setUser(null);
       setSession(null);
+      setIsAdmin(false);
       localStorage.removeItem('supabase.session');
     }
   };
@@ -137,6 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signIn,
     signOut,
     isAuthenticated: !!user && !!session,
+    isAdmin,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -153,6 +168,7 @@ export function useAuth() {
       signIn: async () => ({ error: new Error('Auth is not initialized.') }),
       signOut: async () => {},
       isAuthenticated: false,
+      isAdmin: false,
     };
   }
   return context;
