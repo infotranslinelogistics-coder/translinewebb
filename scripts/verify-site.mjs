@@ -11,6 +11,8 @@ const report = JSON.parse(await readFile('dist/build-report.json', 'utf8'));
 assert.equal(report.pages, paths.length);
 const origin = report.origin;
 const known = new Set(paths);
+assert(known.has('/freight/hotshots'), 'Hotshots service route must be generated');
+assert(known.has('/freight/express-delivery'), 'Express delivery service route must be generated');
 const assets = new Set();
 const incoming = new Set(['/']);
 let checkedLinks = 0;
@@ -24,7 +26,9 @@ for (const route of paths) {
   assert(html.includes(`<link rel="canonical" href="${seoFor(page, origin).url}"`), `${route}: canonical mismatch`);
   assert(html.includes('application/ld+json'), `${route}: missing structured data`);
   const jsonLd = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1];
-  assert(JSON.parse(jsonLd)['@graph'].length >= 3, `${route}: malformed structured data`);
+  const structuredData = JSON.parse(jsonLd);
+  assert(structuredData['@graph'].length >= 3, `${route}: malformed structured data`);
+  if (page.service) assert(structuredData['@graph'].some(node => node['@type'] === 'Service' && node.name === page.service.name), `${route}: missing Service structured data`);
   assert(!/Active corridors?|2× weekly|72h transit|Customer portal/i.test(html), `${route}: obsolete claims`);
   assert(!/src="\/src\//.test(html), `${route}: source assets in production`);
   for (const match of html.matchAll(/(?:href|src)="(\/[^"]*)"/g)) {

@@ -2,7 +2,7 @@
 
 ## Page inventory
 
-The marketing build pre-renders 2,194 pages from a single React entry graph: 1,768 locality records, 382 postcode groups, and 44 main/service/directory pages. Each route is a real HTML document with a unique title, description, canonical, JSON-LD and crawlable links. No crawler-specific content or hidden keyword pages are used.
+The marketing build pre-renders 2,196 pages from a single React entry graph: 1,768 locality records, 382 postcode groups, and 46 main/service/directory pages. Each route is a real HTML document with a unique title, description, canonical, JSON-LD and crawlable links. No crawler-specific content or hidden keyword pages are used. Freight service pages include dedicated `Service` structured data connected to the Transline organisation.
 
 Locality pages provide approximate geographic reference, straight-line distance from central Perth, nearby places, related postcode entries and booking preparation. Postcode pages list their associated towns/suburbs. These directory entries do not assert guaranteed service, a local office, completed deliveries, driving distance or delivery time. Source estimates must be checked against the actual street address.
 
@@ -40,5 +40,11 @@ Store the records under `points`. Do not include raw customer addresses, GPS bre
 - `npm run typecheck:marketing`: active marketing TypeScript graph.
 - `npm run verify:site`: all rendered page headings, metadata, structured data, internal links, assets, discoverability, sitemap coverage, indexing directives and delivery data contract.
 - `npm --prefix portal test`: existing portal tests.
+
+## Booking enquiry email
+
+The public booking form posts directly to `/api/enquiry`. The server validates and bounds every field, rejects the hidden spam field, escapes customer-provided values and asks Resend to email the enquiry to dispatch. The browser shows success only after Resend accepts the message; it retains the entered values and shows phone/email alternatives when submission fails.
+
+Configure `RESEND_API_KEY`, `ENQUIRY_FROM_EMAIL` and, if the recipient differs from the default, `ENQUIRY_TO_EMAIL` in the production host. `ENQUIRY_FROM_EMAIL` must use a sender identity verified in Resend. These are server-only values and must never use a `VITE_` prefix. See `.env.example` for the expected names.
 
 Unknown marketing routes use a genuine HTTP 404 in Express/Netlify and the generated `404.html` on Vercel. Known marketing routes resolve to generated static pages. The portal retains its separate SPA routing.

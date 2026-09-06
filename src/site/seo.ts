@@ -16,5 +16,22 @@ export function seoFor(page: PageInfo, origin = DEFAULT_ORIGIN) {
     { '@type': 'WebPage', '@id': url, name: page.title, description: page.description, url, isPartOf: { '@id': `${origin}/#website` }, inLanguage: 'en-AU', ...(page.place ? { mainEntity: { '@type': 'Place', name: page.place.name, address: { '@type': 'PostalAddress', addressLocality: page.place.name, addressRegion: 'WA', postalCode: page.place.postcode, addressCountry: 'AU' }, geo: { '@type': 'GeoCoordinates', latitude: page.place.lat, longitude: page.place.lng } } } : {}) },
     { '@type': 'BreadcrumbList', itemListElement: breadcrumbs },
   ];
+  if (page.service) {
+    const serviceId = `${url}#service`;
+    graph[2].mainEntity = { '@id': serviceId };
+    graph.push({
+      '@type': 'Service',
+      '@id': serviceId,
+      name: page.service.name,
+      serviceType: page.service.name,
+      description: page.service.body,
+      url,
+      provider: { '@id': `${origin}/#organization` },
+      areaServed: [
+        { '@type': 'City', name: 'Perth' },
+        { '@type': 'State', name: 'Western Australia' },
+      ],
+    });
+  }
   return { url, title: page.title, description: page.description, robots: page.index ? 'index,follow' : 'noindex,follow', structuredData: { '@context': 'https://schema.org', '@graph': graph } };
 }

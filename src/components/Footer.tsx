@@ -5,7 +5,8 @@ export function Footer() {
     <footer className="siteFooter">
       <div className="siteFooter__brand">
         <img src={logo} alt="Transline Logistics" width="1016" height="271" />
-        <p>Freight, courier and removals from Perth across Western Australia.</p>
+        <p>Freight, hotshots, express delivery, courier and removals from Perth across Western Australia.</p>
+        <a className="siteFooter__book" href="/quote">Book now →</a>
       </div>
       <div>
         <span className="eyebrow">Dispatch</span>
@@ -15,6 +16,8 @@ export function Footer() {
       <div>
         <span className="eyebrow">Explore</span>
         <a href="/freight">Freight services</a>
+        <a href="/freight/hotshots">Hotshots</a>
+        <a href="/freight/express-delivery">Express delivery</a>
         <a href="/coverage">Past delivery points</a>
         <a href="/locations">WA location directory</a>
         <a href="/fleet">Our fleet</a>

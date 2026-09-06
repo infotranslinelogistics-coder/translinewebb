@@ -25,15 +25,19 @@ export function Header({ path = '/' }: { path?: string }) {
         <img src={logo} alt="Transline Logistics" width="1016" height="271" />
       </a>
       <nav className="siteHeader__nav" aria-label="Primary navigation">
-        {nav.map(([label, href]) => <a key={href} href={href} aria-current={path === href ? 'page' : undefined}>{label}</a>)}
+        {nav.map(([label, href]) => <a key={href} href={href} aria-current={path === href || (href === '/freight' && path.startsWith('/freight/')) ? 'page' : undefined}>{label}</a>)}
       </nav>
-      <a className="siteHeader__portal" href="/portal/login">Admin portal <span aria-hidden="true">↗</span></a>
+      <div className="siteHeader__actions">
+        <a className="siteHeader__book" href="/quote" aria-current={path === '/quote' ? 'page' : undefined}>Book now <span aria-hidden="true">→</span></a>
+        <a className="siteHeader__portal" href="/portal/login">Admin portal <span aria-hidden="true">↗</span></a>
+      </div>
       <button className="siteHeader__menu" type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-controls="mobile-navigation" aria-label="Toggle navigation">
         {open ? <X /> : <Menu />}
       </button>
       {open && (
         <nav id="mobile-navigation" className="siteHeader__mobile" aria-label="Mobile navigation">
-          {nav.map(([label, href]) => <a key={href} href={href} aria-current={path === href ? 'page' : undefined} onClick={() => setOpen(false)}>{label}</a>)}
+          <a className="siteHeader__mobileBook" href="/quote" aria-current={path === '/quote' ? 'page' : undefined} onClick={() => setOpen(false)}>Book now →</a>
+          {nav.map(([label, href]) => <a key={href} href={href} aria-current={path === href || (href === '/freight' && path.startsWith('/freight/')) ? 'page' : undefined} onClick={() => setOpen(false)}>{label}</a>)}
           <a href="/portal/login">Admin portal ↗</a>
         </nav>
       )}

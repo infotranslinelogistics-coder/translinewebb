@@ -107,11 +107,12 @@ Deferred / requires operations input:
 
 - Header, mobile navigation and footer all use the sampled logo red `#BE1C2D`.
 - Every public header destination now has a dedicated route: `/freight`, `/coverage`, `/fleet`, `/driver-tracking`, `/about`. Admin login remains `/portal/login`.
-- Added contact, quote, service detail, locality and postcode pages. Quotes prepare an email to send, with no false submission-success state.
-- Builds emit 2,194 static HTML pages: 1,768 filtered WA locality/postcode records, 382 postcode groups, and 44 main/service/directory pages. Each page has its own title, description, canonical and structured data; three XML sitemaps cover all pages.
+- Added contact, quote, service detail, locality and postcode pages, including dedicated Hotshots and Express Delivery routes. The booking form posts to `/api/enquiry` and shows success only after the email provider accepts the message.
+- Builds emit 2,196 static HTML pages: 1,768 filtered WA locality/postcode records, 382 postcode groups, and 46 main/service/directory pages. Each page has its own title, description, canonical and structured data; three XML sitemaps cover all pages.
 - The directory is geographic reference material, not evidence of past work, guaranteed coverage, route distances or delivery schedules. Sources, licences and quality filters are in `src/data/geography-sources.json`.
 - `SITE_URL` sets the production canonical origin during build; default remains the existing `https://translinewebb.vercel.app`. Change it to a verified custom domain when one is connected.
 - Production marketing URLs return rendered HTML without JavaScript. Unknown URLs return a real 404. Admin routes have noindex metadata and response headers.
 - Hero map uses a layered geographic surface, pointer tilt and a 2D/3D toggle. Motion includes staggered entry, a finite typography sweep, hover feedback and supported browser page transitions. Reduced-motion preferences disable animation.
+- Production enquiry email requires `RESEND_API_KEY` and a verified `ENQUIRY_FROM_EMAIL` value in Vercel; `ENQUIRY_TO_EMAIL` defaults to `admin@translinelogistics.org`. These values are server-only and documented in `.env.example`.
 - `npm run typecheck:marketing` checks the active marketing entry graph. The older unreferenced `src/components/ui` files still contain pre-existing version-suffixed imports; they are not included in the marketing build.
 - Verification: `npm run build`, `npm run typecheck:marketing`, `npm run verify:site`, and `npm --prefix portal test`.
