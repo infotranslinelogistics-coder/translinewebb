@@ -208,7 +208,7 @@ test('trims and HTML-escapes submitted values and omits reply_to for a phone', a
   assert.equal(options.headers['Idempotency-Key'], '123e4567-e89b-42d3-a456-426614174000');
   assert.equal(options.headers['User-Agent'], 'TranslineLogistics-Enquiry/1.0');
   const email = JSON.parse(options.body);
-  assert.deepEqual(email.to, ['admin@translinelogistics.org']);
+  assert.deepEqual(email.to, ['Info.translinelogistics@gmail.com']);
   assert.equal(email.subject, 'New website enquiry — General freight');
   assert.equal('reply_to' in email, false);
   assert.match(email.html, /Taylor &lt;script&gt;/);

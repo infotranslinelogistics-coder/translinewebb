@@ -113,6 +113,6 @@ Deferred / requires operations input:
 - `SITE_URL` sets the production canonical origin during build; default remains the existing `https://translinewebb.vercel.app`. Change it to a verified custom domain when one is connected.
 - Production marketing URLs return rendered HTML without JavaScript. Unknown URLs return a real 404. Admin routes have noindex metadata and response headers.
 - Hero map uses a layered geographic surface, pointer tilt and a 2D/3D toggle. Motion includes staggered entry, a finite typography sweep, hover feedback and supported browser page transitions. Reduced-motion preferences disable animation.
-- Production enquiry email requires `RESEND_API_KEY` and a verified `ENQUIRY_FROM_EMAIL` value in Vercel; `ENQUIRY_TO_EMAIL` defaults to `admin@translinelogistics.org`. These values are server-only and documented in `.env.example`.
+- Production enquiry email requires `RESEND_API_KEY` and a verified `ENQUIRY_FROM_EMAIL` value in Vercel; booking enquiries default to the private recipient `Info.translinelogistics@gmail.com`. `ENQUIRY_TO_EMAIL` can override it. These values are server-only and documented in `.env.example`.
 - `npm run typecheck:marketing` checks the active marketing entry graph. The older unreferenced `src/components/ui` files still contain pre-existing version-suffixed imports; they are not included in the marketing build.
 - Verification: `npm run build`, `npm run typecheck:marketing`, `npm run verify:site`, and `npm --prefix portal test`.

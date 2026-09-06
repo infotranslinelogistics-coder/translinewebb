@@ -1,5 +1,5 @@
 const RESEND_API_URL = 'https://api.resend.com/emails';
-const DEFAULT_TO_EMAIL = 'admin@translinelogistics.org';
+const DEFAULT_TO_EMAIL = 'Info.translinelogistics@gmail.com';
 const RESEND_TIMEOUT_MS = 10_000;
 const TEMPORARY_ERROR_MESSAGE = 'We could not send your enquiry right now. Please try again or contact dispatch directly.';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

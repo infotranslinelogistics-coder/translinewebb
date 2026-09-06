@@ -45,6 +45,6 @@ Store the records under `points`. Do not include raw customer addresses, GPS bre
 
 The public booking form posts directly to `/api/enquiry`. The server validates and bounds every field, rejects the hidden spam field, escapes customer-provided values and asks Resend to email the enquiry to dispatch. The browser shows success only after Resend accepts the message; it retains the entered values and shows phone/email alternatives when submission fails.
 
-Configure `RESEND_API_KEY`, `ENQUIRY_FROM_EMAIL` and, if the recipient differs from the default, `ENQUIRY_TO_EMAIL` in the production host. `ENQUIRY_FROM_EMAIL` must use a sender identity verified in Resend. These are server-only values and must never use a `VITE_` prefix. See `.env.example` for the expected names.
+Configure `RESEND_API_KEY` and `ENQUIRY_FROM_EMAIL` in the production host. Booking enquiries default to the private recipient `Info.translinelogistics@gmail.com`; `ENQUIRY_TO_EMAIL` can override it without changing the site. `ENQUIRY_FROM_EMAIL` must use a sender identity verified in Resend. These are server-only values and must never use a `VITE_` prefix. See `.env.example` for the expected names.
 
 Unknown marketing routes use a genuine HTTP 404 in Express/Netlify and the generated `404.html` on Vercel. Known marketing routes resolve to generated static pages. The portal retains its separate SPA routing.
