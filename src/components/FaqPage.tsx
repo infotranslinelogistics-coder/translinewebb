@@ -10,7 +10,7 @@ interface FaqItem {
 const faqs: FaqItem[] = [
   {
     question: 'What areas do you service?',
-    answer: 'We provide transport services across Perth metro and regional Western Australia. Our fleet operates throughout the greater Perth area and regional WA centres, with regular routes covering key freight corridors. Contact us to confirm service availability for your specific pickup and delivery locations.',
+    answer: 'Contact dispatch to confirm availability for your Perth or regional Western Australia pickup and delivery locations. Each booking is assessed for the load, vehicle, access and timing.',
   },
   {
     question: 'What types of goods do you transport?',

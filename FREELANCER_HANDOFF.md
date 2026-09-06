@@ -87,10 +87,10 @@ Completed in this pass:
 - Added named Tailwind brand/surface/neutral/signal tokens and the documented type scale.
 - Added local Latin WOFF2 files for Barlow Condensed (display) and Inter (body/UI).
 - Rebuilt the marketing home experience around the shared, data-driven `src/components/RouteMap/` component.
-- RouteMap supports `hero`, `portal`, and `tracking` variants, hub interaction, service filters, route drawing, `requestAnimationFrame` travellers, and reduced motion.
+- RouteMap supports `hero`, `portal`, and `tracking` variants with a real Natural Earth coastline, geographic point projection, optional 3D depth, pointer tilt, zoom, keyboard selection and reduced motion. The former illustrative routes and schedules have been removed.
 - Rebuilt the marketing sections: service capability, coverage, fleet, process, tracking handoff, quote request, operations facts, and footer.
 - Flipped portal work surfaces to warm light while retaining the dark navigation shell; replaced the orange accent with the sampled Transline red and tightened cards/tables.
-- Rebuilt the portal sign-in surface and added the shared route network to the authenticated dispatch dashboard.
+- Rebuilt the portal sign-in surface and added the shared approved-delivery map to the authenticated dispatch dashboard. Existing live driver GPS remains in Live Map.
 - Updated the React Native admin shell to the same light work surface, dark navigation and brand/signal tokens.
 - Updated the iOS splash/status-bar colours to the dark Transline shell.
 - Added a branded Open Graph card and matching page metadata.
@@ -99,7 +99,19 @@ Deferred / requires operations input:
 
 - Confirm the public fleet figures (four vehicle classes, 14-tonne top listed capacity, company-owned fleet) before production publishing.
 - Commission real depot, driver, container and road-train photography. The rebuild intentionally uses no stock photography.
-- Connect RouteMap driver/vehicle filters to Supabase. The current route set is configuration-driven; vehicle-level GPS remains in the existing Live Map.
-- Add shipment-position interpolation between driver GPS pings once shipment-to-shift/vehicle mapping is available.
+- Add real, approved town/suburb delivery locations to `src/data/approved-deliveries.json`. It is empty: the repository contains GPS stops and completed shifts, neither of which establishes a delivery. Do not publish private GPS, customer addresses, driver identifiers or shift events. See `docs/MARKETING_SEO_AND_MAP.md` for the contract.
 - Full driver iOS UX rebuild remains separate. This pass covers shell colours, splash and status bar only.
 - The tracked `app-sync.patch` and `my_changes.patch` target older file layouts and do not apply cleanly in either direction on this branch. They were reviewed and preserved unchanged.
+
+## Marketing pages, geography and motion — 2026-09-06 follow-up
+
+- Header, mobile navigation and footer all use the sampled logo red `#BE1C2D`.
+- Every public header destination now has a dedicated route: `/freight`, `/coverage`, `/fleet`, `/driver-tracking`, `/about`. Admin login remains `/portal/login`.
+- Added contact, quote, service detail, locality and postcode pages. Quotes prepare an email to send, with no false submission-success state.
+- Builds emit 2,194 static HTML pages: 1,768 filtered WA locality/postcode records, 382 postcode groups, and 44 main/service/directory pages. Each page has its own title, description, canonical and structured data; three XML sitemaps cover all pages.
+- The directory is geographic reference material, not evidence of past work, guaranteed coverage, route distances or delivery schedules. Sources, licences and quality filters are in `src/data/geography-sources.json`.
+- `SITE_URL` sets the production canonical origin during build; default remains the existing `https://translinewebb.vercel.app`. Change it to a verified custom domain when one is connected.
+- Production marketing URLs return rendered HTML without JavaScript. Unknown URLs return a real 404. Admin routes have noindex metadata and response headers.
+- Hero map uses a layered geographic surface, pointer tilt and a 2D/3D toggle. Motion includes staggered entry, a finite typography sweep, hover feedback and supported browser page transitions. Reduced-motion preferences disable animation.
+- `npm run typecheck:marketing` checks the active marketing entry graph. The older unreferenced `src/components/ui` files still contain pre-existing version-suffixed imports; they are not included in the marketing build.
+- Verification: `npm run build`, `npm run typecheck:marketing`, `npm run verify:site`, and `npm --prefix portal test`.

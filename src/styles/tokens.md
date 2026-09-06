@@ -37,6 +37,9 @@ White on `brand.primary`, `brand.primary-bright` on `surface.dark`, and `neutral
 
 ## Motion
 
-- The route map owns the only ambient motion on marketing pages.
+- The hero uses a layered, geographically accurate Australia map, optional pointer tilt and a 2D/3D toggle.
 - Portal/admin motion is reserved for panels and action confirmation.
-- `prefers-reduced-motion` disables route drawing and travelling markers while leaving routes visible.
+- Staggered hero entry, a finite type-ribbon sweep, hover feedback and same-origin page transitions provide motion. There are no fictional vehicle travellers or scheduled routes.
+- `prefers-reduced-motion` disables transitions and animation while keeping the geographic map and all controls available.
+
+The public header, mobile navigation and footer use `brand.raw` across their full surfaces. White text and the matching logo artwork sit on the exact sampled red, with a darker red hover treatment.

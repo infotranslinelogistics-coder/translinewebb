@@ -1,2 +1,1 @@
-export { RouteMap, type RouteMapVariant } from './RouteMap';
-export { freightRoutes, hubs, type FreightRoute, type RouteHub, type ServiceType } from './routes';
+export { RouteMap, approvedDeliveryPoints, type RouteMapVariant, type DeliveryPoint } from './RouteMap';

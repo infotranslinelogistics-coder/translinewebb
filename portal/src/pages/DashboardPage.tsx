@@ -233,14 +233,14 @@ export function DashboardPage() {
       <section className="grid overflow-hidden border border-[#D7D3CA] bg-[#FFFEFA] lg:grid-cols-[.72fr_1.28fr]">
         <div className="flex flex-col justify-between border-b border-[#D7D3CA] p-6 lg:border-b-0 lg:border-r">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[.12em] text-[#BE1C2D]">Network snapshot</p>
-            <h2 className="portalShellTitle mt-2 text-4xl font-bold text-[#17191B]">Active corridors</h2>
-            <p className="mt-3 max-w-sm text-sm leading-6 text-[#686B6F]">A shared network view for dispatch. Open Live Map for vehicle-level GPS and shift history.</p>
+            <p className="text-xs font-semibold uppercase tracking-[.12em] text-[#BE1C2D]">Delivery history</p>
+            <h2 className="portalShellTitle mt-2 text-4xl font-bold text-[#17191B]">Past delivery points</h2>
+            <p className="mt-3 max-w-sm text-sm leading-6 text-[#686B6F]">Confirmed, published delivery towns. Open Live Map for live driver positions and private shift history.</p>
           </div>
           <Button onClick={() => navigate('/live-map')} variant="outline" className="mt-6 w-full justify-between rounded-none border-[#A6A6A6] text-[#17191B] hover:bg-[#F5F2EB]">Open live map <span aria-hidden="true">→</span></Button>
         </div>
         <div className="min-h-[340px] p-3 sm:p-5">
-          <RouteMap variant="portal" routeIds={['per-kal', 'per-hed', 'per-adl', 'per-mel']} />
+          <RouteMap variant="portal" />
         </div>
       </section>
 

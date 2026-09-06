@@ -1,0 +1,75 @@
+{
+  "preparedDate": "2026-09-06",
+  "localitySource": {
+    "name": "GeoNames Australian postal-code extract",
+    "url": "https://download.geonames.org/export/zip/AU.zip",
+    "documentation": "https://download.geonames.org/export/zip/readme.txt",
+    "license": "CC BY 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "licenseNote": "Current README explicitly states CC BY 4.0; its older /by/3.0 link is inconsistent. GeoNames homepage also states CC BY 4.0.",
+    "attributionText": "Locality and postcode data adapted from GeoNames, CC BY 4.0. Filtered for this directory.",
+    "attributionUrl": "https://www.geonames.org/",
+    "originalArchive": "geonames-AU.zip",
+    "originalArchiveSha256": "bc406042e451e7e4b1649c4b74df7b2cf644cfd5ba7856eef2236bf0da941464",
+    "originalExtractSha256": "f422fe131f44794f22cf757d02d8828041e7ad5198a5ad76023e509e61b5bc09",
+    "rawAustralianCount": 18521,
+    "rawWaCount": 1940,
+    "rawWaDistinctNames": 1815,
+    "rawWaDistinctPostcodes": 503,
+    "retainedCount": 1768,
+    "retainedDistinctNames": 1745,
+    "retainedDistinctPostcodes": 382,
+    "combinedLocalityAndPostcodePageCount": 2150,
+    "retainedAccuracyCounts": {
+      "3": 374,
+      "4": 1394
+    },
+    "excludedCount": 172,
+    "filters": [
+      "Select records whose source state code is WA.",
+      "Keep 6000 through 6799; exclude known PO-only 6001, 6231, 6331, 6332, 6433, 6531.",
+      "Exclude names ending in DC, BC or PO, City Delivery Centre, Royal Australian Navy Warships, and external-territory names.",
+      "Keep GeoNames accuracy >=3 with finite coordinates within latitude -36..-13 and longitude 112..129.1.",
+      "Keep distinct normalized name/postcode pairs, prefer higher source accuracy for punctuation variants. No fabricated or manually corrected locality records."
+    ],
+    "postalOnlyChecks": [
+      "https://auspost.com.au/postcode/6001",
+      "https://auspost.com.au/postcode/6231",
+      "https://auspost.com.au/postcode/6331",
+      "https://auspost.com.au/postcode/6332",
+      "https://auspost.com.au/postcode/6433",
+      "https://auspost.com.au/postcode/6531"
+    ],
+    "limitations": [
+      "Coordinates are GeoNames estimates, not street addresses, route geometry, survey points, postcode boundaries, depots or verified service coverage.",
+      "Accuracy 3 coordinates can be shared neighbouring-postcode estimates; accuracy 4 is linked to a GeoNames place, not guaranteed survey accuracy.",
+      "sourceAdmin2 is preserved for source auditing only. Obvious mismatches exist (e.g. Perth 6000 is labelled Vincent and Geraldton 6530 Chapman Valley). Do not display it as a verified LGA or municipality.",
+      "The source is a postal-place directory, not a complete official gazetteer or guaranteed current Australia Post list. Some aliases, historic names, parks or locality/postcode discrepancies may remain.",
+      "The filters deliberately omit some real remote locations and islands with inadequate source coordinates. A missing locality does not imply that freight service is unavailable.",
+      "No comprehensive licensed delivery-category column exists in this extract; the conservative filtering removes known postal-only ranges and verified outliers but does not certify every remaining postcode as physical delivery."
+    ]
+  },
+  "boundarySource": {
+    "name": "Natural Earth Admin 0 Countries, 1:50m",
+    "downloadUrl": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson",
+    "sourceUrl": "https://www.naturalearthdata.com/downloads/50m-cultural-vectors/50m-admin-0-countries-2/",
+    "license": "Public domain",
+    "licenseUrl": "https://www.naturalearthdata.com/about/terms-of-use/",
+    "attributionText": "Made with Natural Earth.",
+    "originalSha256": "3e458fc036ad0a66411f2c1e6cac49c5d7bfb81cb1123bc513b22511a2b7fdeb",
+    "filter": "ADM0_A3 equals AUS; retain polygons whose coordinates are north of 44 degrees S and west of 155 degrees E, omitting only remote Macquarie Island. Original coordinates retained, unrelated properties removed.",
+    "countryFeaturesInOriginal": 242,
+    "retainedFeatures": 1,
+    "originalAusPolygons": 42,
+    "retainedPolygons": 41,
+    "retainedCoordinates": 1792,
+    "coordinateReference": "WGS84 longitude, latitude (CRS84)",
+    "bbox": [
+      112.908203,
+      -43.619336,
+      153.616895,
+      -10.051758
+    ],
+    "limitations": "Generalized cartographic boundary. Includes mainland, Tasmania and smaller represented islands. Not cadastral or road-routing data."
+  }
+}

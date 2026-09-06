@@ -31,6 +31,7 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(express.json());
+app.use('/portal', (_req, res, next) => { res.setHeader('X-Robots-Tag', 'noindex, nofollow'); next(); });
 
 // Admin API routes
 app.post('/admin/create-driver', createDriver);
@@ -56,11 +57,11 @@ app.get('/portal/*', (req, res) => {
 // Serve main site static files
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// Main SPA: catch-all for all other routes
+// Marketing routes are pre-rendered. Unknown paths must not become soft 404s.
 app.get('*', (req, res) => {
-  const mainIndexPath = path.join(__dirname, 'dist', 'index.html');
+  const mainIndexPath = path.join(__dirname, 'dist', '404.html');
   if (fs.existsSync(mainIndexPath)) {
-    res.sendFile(mainIndexPath);
+    res.status(404).sendFile(mainIndexPath);
   } else {
     res.status(404).send('Main index.html not found');
   }

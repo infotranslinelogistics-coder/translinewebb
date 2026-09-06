@@ -13,13 +13,24 @@ export function Footer() {
         <a href="mailto:admin@translinelogistics.org">admin@translinelogistics.org</a>
       </div>
       <div>
-        <span className="eyebrow">Depot</span>
+        <span className="eyebrow">Explore</span>
+        <a href="/freight">Freight services</a>
+        <a href="/coverage">Past delivery points</a>
+        <a href="/locations">WA location directory</a>
+        <a href="/fleet">Our fleet</a>
+        <a href="/about">About Transline</a>
+      </div>
+      <div>
+        <span className="eyebrow">Perth operations</span>
         <p>Perth, Western Australia</p>
+        <a href="/contact">Contact dispatch</a>
+        <a href="/driver-tracking">Driver tracking</a>
         <a href="mailto:admin@translinelogistics.org?subject=Driver%20application">Drive with Transline →</a>
       </div>
       <div className="siteFooter__legal">
         <span>© {new Date().getFullYear()} Transline Logistics</span>
-        <span>NHVAS · Chain of Responsibility</span>
+        <a href="/privacy">Privacy</a>
+        <a href="/sitemap.xml">Sitemap</a>
       </div>
     </footer>
   );
